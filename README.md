@@ -191,11 +191,11 @@ curl http://localhost:3000/api/ingest
 - [x] Budget alerts & cost projections ✅
 - [x] Live streaming simulation ✅
 - [x] Python SDK & REST API ✅
-- [ ] WebSocket real-time trace streaming
-- [ ] LangGraph / CrewAI / AutoGen framework adapters
-- [ ] Team collaboration (shared traces)
-- [ ] VS Code extension
-- [ ] npm package (`npm install agentlens`)
+- [x] Real-time trace streaming (SSE) ✅
+- [x] LangGraph / CrewAI / AutoGen framework adapters ✅
+- [x] Team collaboration (shared traces) ✅
+- [x] VS Code extension ✅
+- [x] npm package (`agentlens-sdk`) ✅
 
 ---
 

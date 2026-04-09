@@ -1,0 +1,27 @@
+{
+  "name": "agentlens-sdk",
+  "version": "0.1.0",
+  "description": "AgentLens SDK — Trace your AI agents with one line of code. Chrome DevTools for AI Agents.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai", "agents", "llm", "tracing", "debugging", "observability",
+    "openai", "anthropic", "langchain", "crewai", "autogen",
+    "mcp", "model-context-protocol"
+  ],
+  "author": "ModernOps888",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ModernOps888/agentlens"
+  },
+  "homepage": "https://github.com/ModernOps888/agentlens",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

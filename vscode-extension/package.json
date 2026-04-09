@@ -1,0 +1,115 @@
+{
+  "name": "agentlens-vscode",
+  "displayName": "AgentLens — AI Agent Debugger",
+  "description": "Visual time-travel debugger for AI agent workflows. Inspect LLM calls, trace costs, and detect anomalies directly in VS Code.",
+  "version": "0.1.0",
+  "publisher": "ModernOps888",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ModernOps888/agentlens"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Debuggers", "Visualization", "Other"],
+  "keywords": ["ai", "agents", "llm", "debugging", "tracing", "openai", "mcp"],
+  "icon": "icon.png",
+  "activationEvents": [
+    "onCommand:agentlens.openPanel",
+    "onCommand:agentlens.startCapture",
+    "onCommand:agentlens.stopCapture"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "agentlens.openPanel",
+        "title": "AgentLens: Open Debugger Panel",
+        "category": "AgentLens"
+      },
+      {
+        "command": "agentlens.startCapture",
+        "title": "AgentLens: Start Trace Capture",
+        "category": "AgentLens"
+      },
+      {
+        "command": "agentlens.stopCapture",
+        "title": "AgentLens: Stop Trace Capture",
+        "category": "AgentLens"
+      },
+      {
+        "command": "agentlens.exportTrace",
+        "title": "AgentLens: Export Current Trace",
+        "category": "AgentLens"
+      },
+      {
+        "command": "agentlens.connectServer",
+        "title": "AgentLens: Connect to Server",
+        "category": "AgentLens"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agentlens",
+          "title": "AgentLens",
+          "icon": "$(debug-alt)"
+        }
+      ]
+    },
+    "views": {
+      "agentlens": [
+        {
+          "id": "agentlens.sessions",
+          "name": "Trace Sessions"
+        },
+        {
+          "id": "agentlens.timeline",
+          "name": "Timeline"
+        },
+        {
+          "id": "agentlens.agents",
+          "name": "Agents"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AgentLens",
+      "properties": {
+        "agentlens.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:3000",
+          "description": "URL of the AgentLens server"
+        },
+        "agentlens.autoConnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically connect to AgentLens server on startup"
+        },
+        "agentlens.showNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notifications for anomalies and errors"
+        }
+      }
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "agentlens.startCapture",
+          "when": "view == agentlens.sessions",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.0.0"
+  }
+}

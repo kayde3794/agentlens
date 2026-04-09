@@ -42,6 +42,17 @@ class TraceStore {
   private sessions: Map<string, TraceSession> = new Map();
   private agentColorMap: Map<string, string> = new Map();
   private colorIndex = 0;
+  private listeners: Set<(event: string, data: unknown) => void> = new Set();
+
+  /** Subscribe to real-time trace events */
+  subscribe(listener: (event: string, data: unknown) => void) {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
+  private emit(event: string, data: unknown) {
+    this.listeners.forEach(fn => fn(event, data));
+  }
 
   getAgentColor(agentName: string): string {
     if (!this.agentColorMap.has(agentName)) {
@@ -56,7 +67,8 @@ class TraceStore {
     const now = new Date().toISOString();
 
     // Create session if it doesn't exist
-    if (!this.sessions.has(sessionId)) {
+    const isNewSession = !this.sessions.has(sessionId);
+    if (isNewSession) {
       this.sessions.set(sessionId, {
         id: sessionId,
         name: raw.session_name || `Session ${sessionId.substring(0, 8)}`,
@@ -158,6 +170,20 @@ class TraceStore {
     // Run anomaly detection
     this.detectAnomalies(session, step);
 
+    // Emit events for SSE subscribers
+    if (isNewSession) {
+      this.emit('session:new', { id: session.id, name: session.name, started_at: session.started_at });
+    }
+    this.emit('step:new', { session_id: sessionId, step });
+    this.emit('session:update', {
+      id: session.id,
+      total_steps: session.total_steps,
+      total_tokens: session.total_tokens,
+      total_cost: session.total_cost,
+      anomaly_count: session.anomaly_count,
+      status: session.status,
+    });
+
     return step;
   }
 
@@ -216,6 +242,7 @@ class TraceStore {
     if (session) {
       session.status = status || 'completed';
       session.ended_at = new Date().toISOString();
+      this.emit('session:end', { id: sessionId, status: session.status });
     }
   }
 
@@ -229,6 +256,20 @@ class TraceStore {
     );
   }
 
+  /** Share a session — generates a share token */
+  shareSession(sessionId: string): string | null {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    const token = Buffer.from(sessionId).toString('base64url');
+    return token;
+  }
+
+  /** Get session by share token */
+  getSharedSession(token: string): TraceSession | undefined {
+    const sessionId = Buffer.from(token, 'base64url').toString();
+    return this.sessions.get(sessionId);
+  }
+
   clear() {
     this.sessions.clear();
   }
@@ -236,3 +277,4 @@ class TraceStore {
 
 // Singleton instance
 export const traceStore = new TraceStore();
+
