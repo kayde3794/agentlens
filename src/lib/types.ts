@@ -69,6 +69,11 @@ export interface TraceStep {
 
   // Anomaly detection
   anomalies?: Anomaly[];
+
+  /** SimHash fingerprint of the prompt, computed pre-truncation.
+   *  Used for loop detection when storePayloads is false.
+   *  32-bit locality-sensitive hash — similar texts produce similar hashes. */
+  promptFingerprint?: number;
 }
 
 export interface Anomaly {

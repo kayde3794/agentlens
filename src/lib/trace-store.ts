@@ -206,6 +206,9 @@ class TraceStore {
       };
     }
 
+    // ─── Fingerprint BEFORE truncation (for loop detection) ────────────
+    const promptFingerprint = raw.prompt ? this.computeSimHash(raw.prompt) : undefined;
+
     // ─── Payload truncation ─────────────────────────────────────────────
     raw.prompt = this.truncatePayload(raw.prompt);
     raw.system_prompt = this.truncatePayload(raw.system_prompt);
@@ -264,6 +267,7 @@ class TraceStore {
       error_message: raw.error_message,
       error_type: raw.error_type,
       anomalies: [],
+      promptFingerprint,
     };
 
     // Build MCP data if present
@@ -340,11 +344,21 @@ class TraceStore {
   }
 
   private detectAnomalies(session: TraceSession, step: TraceStep) {
-    // Check for repeated prompts (loop detection)
-    if (step.prompt && session.steps.length >= 2) {
+    // ─── Loop detection (works with AND without payloads) ─────────────
+    if (session.steps.length >= 2) {
       const prev = session.steps[session.steps.length - 2];
-      if (prev.prompt && prev.agent_name === step.agent_name) {
-        const similarity = this.textSimilarity(step.prompt, prev.prompt);
+      if (prev.agent_name === step.agent_name) {
+        let similarity = 0;
+
+        // Prefer full-text comparison when payloads are available
+        if (step.prompt && prev.prompt) {
+          similarity = this.textSimilarity(step.prompt, prev.prompt);
+        }
+        // Fall back to SimHash fingerprint comparison (works when storePayloads: false)
+        else if (step.promptFingerprint != null && prev.promptFingerprint != null) {
+          similarity = this.simHashSimilarity(step.promptFingerprint, prev.promptFingerprint);
+        }
+
         if (similarity > 0.85) {
           step.anomalies = step.anomalies || [];
           step.anomalies.push({
@@ -381,12 +395,57 @@ class TraceStore {
     }
   }
 
+  // ─── Text Similarity (Jaccard, used when payloads are available) ────
   private textSimilarity(a: string, b: string): number {
     const tokensA = new Set(a.toLowerCase().split(/\s+/));
     const tokensB = new Set(b.toLowerCase().split(/\s+/));
     const intersection = [...tokensA].filter(t => tokensB.has(t));
     const union = new Set([...tokensA, ...tokensB]);
     return union.size > 0 ? intersection.length / union.size : 0;
+  }
+
+  // ─── SimHash (locality-sensitive hashing for fingerprint comparison) ─
+  /** Compute a 32-bit SimHash fingerprint from text.
+   *  Similar texts produce hashes with low Hamming distance. */
+  private computeSimHash(text: string): number {
+    const tokens = text.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+    const bits = 32;
+    const v = new Array(bits).fill(0);
+
+    for (const token of tokens) {
+      const hash = this.fnv1a(token);
+      for (let i = 0; i < bits; i++) {
+        v[i] += ((hash >>> i) & 1) ? 1 : -1;
+      }
+    }
+
+    let simhash = 0;
+    for (let i = 0; i < bits; i++) {
+      if (v[i] > 0) simhash |= (1 << i);
+    }
+    return simhash >>> 0; // unsigned 32-bit
+  }
+
+  /** FNV-1a hash — fast, well-distributed 32-bit hash for individual tokens */
+  private fnv1a(str: string): number {
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+      hash ^= str.charCodeAt(i);
+      hash = (hash * 0x01000193) | 0;
+    }
+    return hash >>> 0;
+  }
+
+  /** Compare two SimHash fingerprints via normalized Hamming distance.
+   *  Returns 0.0–1.0 where 1.0 = identical. */
+  private simHashSimilarity(a: number, b: number): number {
+    let xor = (a ^ b) >>> 0;
+    let diffBits = 0;
+    while (xor) {
+      diffBits += xor & 1;
+      xor >>>= 1;
+    }
+    return 1 - (diffBits / 32);
   }
 
   endSession(sessionId: string, status?: 'completed' | 'failed') {
