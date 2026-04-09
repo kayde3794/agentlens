@@ -24,7 +24,12 @@
 
 <p align="center">
   <img src="docs/hero-cost-dashboard.png" alt="AgentLens Cost Dashboard" width="49%">
-  <img src="docs/anomaly-detection.png" alt="AgentLens Anomaly Detection" width="49%">
+  <img src="docs/anomaly-detection.png" alt="AgentLens Budget Alerts & Anomaly Detection" width="49%">
+</p>
+
+<p align="center">
+  <img src="docs/compare-view.png" alt="AgentLens Run Comparison" width="49%">
+  <img src="docs/search-filter.png" alt="AgentLens Search & Filter" width="49%">
 </p>
 
 ---
