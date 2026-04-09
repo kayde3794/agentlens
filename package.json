@@ -1,0 +1,33 @@
+{
+  "name": "agentlens",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.8.0",
+    "express": "^5.2.1",
+    "http-proxy": "^1.18.1",
+    "next": "16.2.3",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "uuid": "^13.0.0",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.18.1",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.3",
+    "typescript": "^5"
+  }
+}
