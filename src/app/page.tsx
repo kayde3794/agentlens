@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { TraceSession, TraceStep, Anomaly } from '@/lib/types';
 import { demoSessions } from '@/lib/demo-data';
 
@@ -102,17 +102,120 @@ function SessionCard({
   );
 }
 
+// ─── Filter & Search Toolbar ────────────────────────────────────────────────
+function FilterToolbar({
+  session,
+  searchQuery,
+  setSearchQuery,
+  filterAgent,
+  setFilterAgent,
+  filterType,
+  setFilterType,
+  filterStatus,
+  setFilterStatus,
+  filteredCount,
+  totalCount,
+}: {
+  session: TraceSession;
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
+  filterAgent: string;
+  setFilterAgent: (a: string) => void;
+  filterType: string;
+  setFilterType: (t: string) => void;
+  filterStatus: string;
+  setFilterStatus: (s: string) => void;
+  filteredCount: number;
+  totalCount: number;
+}) {
+  const hasFilters = searchQuery || filterAgent || filterType || filterStatus;
+
+  return (
+    <div className="filter-toolbar" id="filter-toolbar">
+      <div className="filter-search-wrapper">
+        <span className="filter-search-icon">🔍</span>
+        <input
+          type="text"
+          className="filter-search"
+          placeholder="Search steps... (prompts, responses, tools)"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          id="search-input"
+        />
+        {searchQuery && (
+          <button className="filter-clear-btn" onClick={() => setSearchQuery('')}>✕</button>
+        )}
+      </div>
+      <div className="filter-selects">
+        <select
+          className="filter-select"
+          value={filterAgent}
+          onChange={e => setFilterAgent(e.target.value)}
+          id="filter-agent"
+        >
+          <option value="">All Agents</option>
+          {session.agents.map(a => (
+            <option key={a.name} value={a.name}>{a.name}</option>
+          ))}
+        </select>
+        <select
+          className="filter-select"
+          value={filterType}
+          onChange={e => setFilterType(e.target.value)}
+          id="filter-type"
+        >
+          <option value="">All Types</option>
+          {Object.entries(STEP_TYPE_CONFIG).map(([key, val]) => (
+            <option key={key} value={key}>{val.icon} {val.label}</option>
+          ))}
+        </select>
+        <select
+          className="filter-select"
+          value={filterStatus}
+          onChange={e => setFilterStatus(e.target.value)}
+          id="filter-status"
+        >
+          <option value="">All Status</option>
+          <option value="success">✅ Success</option>
+          <option value="error">❌ Error</option>
+          <option value="loop_detected">🔄 Loop Detected</option>
+        </select>
+        {hasFilters && (
+          <button
+            className="filter-reset-btn"
+            onClick={() => {
+              setSearchQuery('');
+              setFilterAgent('');
+              setFilterType('');
+              setFilterStatus('');
+            }}
+          >
+            Clear All
+          </button>
+        )}
+      </div>
+      {hasFilters && (
+        <div className="filter-result-count">
+          Showing <strong>{filteredCount}</strong> of {totalCount} steps
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Timeline Step Component ────────────────────────────────────────────────
 function TimelineStep({
   step,
   index,
   active,
   onClick,
+  dimmed,
 }: {
   step: TraceStep;
   index: number;
   active: boolean;
   onClick: () => void;
+  dimmed?: boolean;
 }) {
   const config = STEP_TYPE_CONFIG[step.step_type] || { icon: '❓', label: 'Unknown' };
   const hasAnomaly = step.anomalies && step.anomalies.length > 0;
@@ -120,11 +223,10 @@ function TimelineStep({
 
   return (
     <div
-      className={`timeline-step ${active ? 'active' : ''} ${hasAnomaly ? 'has-anomaly' : ''} ${isCritical ? 'critical' : ''}`}
+      className={`timeline-step ${active ? 'active' : ''} ${hasAnomaly ? 'has-anomaly' : ''} ${isCritical ? 'critical' : ''} ${dimmed ? 'dimmed' : ''}`}
       onClick={onClick}
       style={{
         animationDelay: `${index * 60}ms`,
-        // Timeline dot color matches agent
         ['--agent-color' as string]: step.agent_color,
       }}
       id={`step-${step.id}`}
@@ -210,7 +312,6 @@ function InspectorPanel({ step, session }: { step: TraceStep | null; session: Tr
     { id: 'anomalies', label: `Anomalies (${step.anomalies?.length || 0})`, show: (step.anomalies?.length || 0) > 0 },
   ];
 
-  // Reset tab if current tab is not available
   const visibleTabs = tabs.filter(t => t.show);
   const currentTab = visibleTabs.find(t => t.id === activeTab) ? activeTab : 'details';
 
@@ -659,6 +760,180 @@ function CostDashboard({ session }: { session: TraceSession }) {
   );
 }
 
+// ─── Compare View Component ─────────────────────────────────────────────────
+function CompareView({
+  sessions,
+  onClose,
+}: {
+  sessions: TraceSession[];
+  onClose: () => void;
+}) {
+  const [leftId, setLeftId] = useState<string>(sessions[0]?.id || '');
+  const [rightId, setRightId] = useState<string>(sessions[1]?.id || sessions[0]?.id || '');
+
+  const left = sessions.find(s => s.id === leftId);
+  const right = sessions.find(s => s.id === rightId);
+
+  if (!left || !right) return null;
+
+  const metrics = [
+    { label: 'Status', left: left.status, right: right.status, icon: '🔘' },
+    { label: 'Agents', left: left.agents.length, right: right.agents.length, icon: '👥' },
+    { label: 'Steps', left: left.total_steps, right: right.total_steps, icon: '📊' },
+    { label: 'Tokens', left: formatTokens(left.total_tokens), right: formatTokens(right.total_tokens), icon: '🧠' },
+    { label: 'Cost', left: formatCost(left.total_cost), right: formatCost(right.total_cost), icon: '💰' },
+    { label: 'Duration', left: formatDuration(left.total_duration_ms), right: formatDuration(right.total_duration_ms), icon: '⏱️' },
+    { label: 'Anomalies', left: left.anomaly_count, right: right.anomaly_count, icon: '⚠️' },
+  ];
+
+  // Create aligned step pairs (by index)
+  const maxSteps = Math.max(left.steps.length, right.steps.length);
+
+  return (
+    <div className="compare-overlay" id="compare-view">
+      <div className="compare-header">
+        <div className="compare-title">
+          <span>🔀</span> Run Comparison
+        </div>
+        <button className="compare-close" onClick={onClose}>✕ Close</button>
+      </div>
+
+      <div className="compare-selectors">
+        <div className="compare-selector">
+          <label>Run A</label>
+          <select value={leftId} onChange={e => setLeftId(e.target.value)} className="filter-select">
+            {sessions.map(s => (
+              <option key={s.id} value={s.id}>{s.name} ({s.status})</option>
+            ))}
+          </select>
+        </div>
+        <div className="compare-vs">VS</div>
+        <div className="compare-selector">
+          <label>Run B</label>
+          <select value={rightId} onChange={e => setRightId(e.target.value)} className="filter-select">
+            {sessions.map(s => (
+              <option key={s.id} value={s.id}>{s.name} ({s.status})</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Metrics comparison */}
+      <div className="compare-metrics">
+        {metrics.map(m => {
+          const isDiff = String(m.left) !== String(m.right);
+          return (
+            <div key={m.label} className={`compare-metric ${isDiff ? 'diff' : ''}`}>
+              <div className="compare-metric-icon">{m.icon}</div>
+              <div className="compare-metric-label">{m.label}</div>
+              <div className={`compare-metric-value left ${left.status === 'completed' ? 'success' : 'fail'}`}>{String(m.left)}</div>
+              <div className={`compare-metric-value right ${right.status === 'completed' ? 'success' : 'fail'}`}>{String(m.right)}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Step-by-step comparison */}
+      <div className="compare-steps-header">
+        <div className="compare-steps-col-title">{left.name}</div>
+        <div className="compare-steps-col-title">{right.name}</div>
+      </div>
+      <div className="compare-steps-body">
+        {Array.from({ length: maxSteps }, (_, i) => {
+          const ls = left.steps[i];
+          const rs = right.steps[i];
+          const configL = ls ? STEP_TYPE_CONFIG[ls.step_type] || { icon: '❓', label: 'Unknown' } : null;
+          const configR = rs ? STEP_TYPE_CONFIG[rs.step_type] || { icon: '❓', label: 'Unknown' } : null;
+          const isDiff = ls && rs && (ls.step_type !== rs.step_type || ls.status !== rs.status);
+
+          return (
+            <div key={i} className={`compare-step-row ${isDiff ? 'diff' : ''}`}>
+              <div className="compare-step-cell">
+                {ls ? (
+                  <>
+                    <span className="compare-step-num">{i + 1}</span>
+                    <span className="step-agent-badge" style={{
+                      color: ls.agent_color, background: `${ls.agent_color}15`,
+                      border: `1px solid ${ls.agent_color}30`, fontSize: 10
+                    }}>
+                      {ls.agent_name}
+                    </span>
+                    <span className="compare-step-type">{configL?.icon} {configL?.label}</span>
+                    <span className="compare-step-duration">{formatDuration(ls.duration_ms)}</span>
+                    {ls.cost && ls.cost.total_cost > 0 && (
+                      <span className="step-cost-badge" style={{ fontSize: 10 }}>{formatCost(ls.cost.total_cost)}</span>
+                    )}
+                    {ls.status === 'error' && <span className="compare-step-error">✕</span>}
+                    {ls.anomalies && ls.anomalies.length > 0 && <span className="compare-step-anomaly">⚠️ {ls.anomalies.length}</span>}
+                  </>
+                ) : <span className="compare-step-empty">—</span>}
+              </div>
+              <div className="compare-step-cell">
+                {rs ? (
+                  <>
+                    <span className="compare-step-num">{i + 1}</span>
+                    <span className="step-agent-badge" style={{
+                      color: rs.agent_color, background: `${rs.agent_color}15`,
+                      border: `1px solid ${rs.agent_color}30`, fontSize: 10
+                    }}>
+                      {rs.agent_name}
+                    </span>
+                    <span className="compare-step-type">{configR?.icon} {configR?.label}</span>
+                    <span className="compare-step-duration">{formatDuration(rs.duration_ms)}</span>
+                    {rs.cost && rs.cost.total_cost > 0 && (
+                      <span className="step-cost-badge" style={{ fontSize: 10 }}>{formatCost(rs.cost.total_cost)}</span>
+                    )}
+                    {rs.status === 'error' && <span className="compare-step-error">✕</span>}
+                    {rs.anomalies && rs.anomalies.length > 0 && <span className="compare-step-anomaly">⚠️ {rs.anomalies.length}</span>}
+                  </>
+                ) : <span className="compare-step-empty">—</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Keyboard Shortcuts Modal ───────────────────────────────────────────────
+function KeyboardShortcuts({ onClose }: { onClose: () => void }) {
+  const shortcuts = [
+    { keys: ['Space'], desc: 'Play / Pause' },
+    { keys: ['→'], desc: 'Next step' },
+    { keys: ['←'], desc: 'Previous step' },
+    { keys: ['R'], desc: 'Reset playback' },
+    { keys: ['1-9'], desc: 'Jump to step N' },
+    { keys: ['F'], desc: 'Focus search' },
+    { keys: ['E'], desc: 'Export trace JSON' },
+    { keys: ['C'], desc: 'Toggle cost dashboard' },
+    { keys: ['D'], desc: 'Toggle compare/diff view' },
+    { keys: ['?'], desc: 'Show keyboard shortcuts' },
+    { keys: ['Esc'], desc: 'Close panel / modal' },
+  ];
+
+  return (
+    <div className="shortcuts-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="shortcuts-modal">
+        <div className="shortcuts-modal-header">
+          <span>⌨️ Keyboard Shortcuts</span>
+          <button className="shortcuts-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="shortcuts-list">
+          {shortcuts.map(s => (
+            <div key={s.desc} className="shortcut-row">
+              <div className="shortcut-keys">
+                {s.keys.map(k => <kbd key={k}>{k}</kbd>)}
+              </div>
+              <div className="shortcut-desc">{s.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main App ───────────────────────────────────────────────────────────────
 export default function AgentLensApp() {
   const [sessions] = useState<TraceSession[]>(demoSessions);
@@ -667,10 +942,43 @@ export default function AgentLensApp() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackIndex, setPlaybackIndex] = useState(0);
   const [rightPanel, setRightPanel] = useState<'inspector' | 'cost'>('inspector');
+  const [showCompare, setShowCompare] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterAgent, setFilterAgent] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
 
   const activeSession = sessions.find(s => s.id === activeSessionId) || null;
   const activeStep = activeSession?.steps.find(s => s.id === activeStepId) || null;
+
+  // Filter logic
+  const filteredSteps = useMemo(() => {
+    if (!activeSession) return [];
+    return activeSession.steps.filter(step => {
+      if (filterAgent && step.agent_name !== filterAgent) return false;
+      if (filterType && step.step_type !== filterType) return false;
+      if (filterStatus && step.status !== filterStatus) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const haystack = [
+          step.prompt, step.response, step.tool_name,
+          step.agent_name, step.error_message, step.decision_reason,
+          step.spawned_agent, step.mcp?.tool_name, step.mcp?.server_name,
+          getStepPreview(step),
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [activeSession, searchQuery, filterAgent, filterType, filterStatus]);
+
+  const filteredStepIds = useMemo(() => new Set(filteredSteps.map(s => s.id)), [filteredSteps]);
+  const hasActiveFilters = !!(searchQuery || filterAgent || filterType || filterStatus);
 
   // Auto-select first session
   useEffect(() => {
@@ -717,7 +1025,97 @@ export default function AgentLensApp() {
     stopPlayback();
     setActiveStepId(null);
     setPlaybackIndex(0);
+    setSearchQuery('');
+    setFilterAgent('');
+    setFilterType('');
+    setFilterStatus('');
   }, [activeSessionId, stopPlayback]);
+
+  // Export trace to JSON
+  const exportTraceJSON = useCallback(() => {
+    if (!activeSession) return;
+    const data = {
+      version: '1.0.0',
+      exported_at: new Date().toISOString(),
+      tool: 'AgentLens',
+      session: {
+        id: activeSession.id,
+        name: activeSession.name,
+        status: activeSession.status,
+        total_steps: activeSession.total_steps,
+        total_tokens: activeSession.total_tokens,
+        total_cost: activeSession.total_cost,
+        total_duration_ms: activeSession.total_duration_ms,
+        anomaly_count: activeSession.anomaly_count,
+        agents: activeSession.agents,
+        steps: activeSession.steps,
+      },
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `agentlens-trace-${activeSession.id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [activeSession]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ignore if typing in input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) {
+        if (e.key === 'Escape') {
+          (e.target as HTMLElement).blur();
+        }
+        return;
+      }
+
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        togglePlayback();
+      } else if (e.key === 'ArrowRight') {
+        if (!activeSession) return;
+        const nextIdx = Math.min(playbackIndex + 1, activeSession.steps.length - 1);
+        setPlaybackIndex(nextIdx);
+        setActiveStepId(activeSession.steps[nextIdx].id);
+      } else if (e.key === 'ArrowLeft') {
+        if (!activeSession) return;
+        const prevIdx = Math.max(playbackIndex - 1, 0);
+        setPlaybackIndex(prevIdx);
+        setActiveStepId(activeSession.steps[prevIdx].id);
+      } else if (e.key === 'r' || e.key === 'R') {
+        if (!activeSession) return;
+        stopPlayback();
+        setPlaybackIndex(0);
+        setActiveStepId(activeSession.steps[0]?.id || null);
+      } else if (e.key >= '1' && e.key <= '9') {
+        if (!activeSession) return;
+        const idx = parseInt(e.key) - 1;
+        if (idx < activeSession.steps.length) {
+          setPlaybackIndex(idx);
+          setActiveStepId(activeSession.steps[idx].id);
+        }
+      } else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        document.getElementById('search-input')?.focus();
+      } else if (e.key === 'e' || e.key === 'E') {
+        exportTraceJSON();
+      } else if (e.key === 'c' || e.key === 'C') {
+        setRightPanel(p => p === 'cost' ? 'inspector' : 'cost');
+      } else if (e.key === 'd' || e.key === 'D') {
+        setShowCompare(v => !v);
+      } else if (e.key === '?') {
+        setShowShortcuts(v => !v);
+      } else if (e.key === 'Escape') {
+        if (showCompare) setShowCompare(false);
+        else if (showShortcuts) setShowShortcuts(false);
+      }
+    };
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [activeSession, playbackIndex, togglePlayback, stopPlayback, exportTraceJSON, showCompare, showShortcuts]);
 
   // Handle scrubber click
   const handleScrubberClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -739,6 +1137,16 @@ export default function AgentLensApp() {
 
   return (
     <div className="app-layout" id="agentlens-app">
+      {/* ─── Compare Overlay ─── */}
+      {showCompare && (
+        <CompareView sessions={sessions} onClose={() => setShowCompare(false)} />
+      )}
+
+      {/* ─── Keyboard Shortcuts Modal ─── */}
+      {showShortcuts && (
+        <KeyboardShortcuts onClose={() => setShowShortcuts(false)} />
+      )}
+
       {/* ─── Header ─── */}
       <header className="header" id="header">
         <div className="header-brand">
@@ -749,10 +1157,35 @@ export default function AgentLensApp() {
         <div className="header-actions">
           <div className="header-badge demo">⚡ DEMO MODE</div>
           <div
-            className="header-badge"
+            className="header-badge clickable"
+            style={{ cursor: 'pointer' }}
+            onClick={() => setShowShortcuts(true)}
+            title="Keyboard Shortcuts (?)"
+          >
+            ⌨️ Shortcuts
+          </div>
+          <div
+            className="header-badge clickable"
+            style={{ cursor: 'pointer' }}
+            onClick={exportTraceJSON}
+            title="Export trace as JSON (E)"
+          >
+            📥 Export
+          </div>
+          <div
+            className="header-badge clickable"
+            style={{ cursor: 'pointer' }}
+            onClick={() => setShowCompare(true)}
+            title="Compare runs (D)"
+          >
+            🔀 Compare
+          </div>
+          <div
+            className="header-badge clickable"
             style={{ cursor: 'pointer' }}
             onClick={() => setRightPanel(rightPanel === 'cost' ? 'inspector' : 'cost')}
             id="toggle-cost-dashboard"
+            title="Toggle Cost Dashboard (C)"
           >
             💰 {rightPanel === 'cost' ? 'Inspector' : 'Cost Dashboard'}
           </div>
@@ -780,6 +1213,7 @@ export default function AgentLensApp() {
             {activeSession.agents.map(agent => (
               <div
                 key={agent.name}
+                className={`sidebar-agent-item ${filterAgent === agent.name ? 'active-filter' : ''}`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -787,7 +1221,12 @@ export default function AgentLensApp() {
                   padding: '6px 12px',
                   fontSize: 12,
                   color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  borderRadius: 6,
+                  transition: 'background 0.15s',
                 }}
+                onClick={() => setFilterAgent(filterAgent === agent.name ? '' : agent.name)}
+                title={`Click to filter by ${agent.name}`}
               >
                 <span style={{
                   width: 10, height: 10, borderRadius: '50%',
@@ -838,6 +1277,21 @@ export default function AgentLensApp() {
               )}
             </div>
 
+            {/* Filter toolbar */}
+            <FilterToolbar
+              session={activeSession}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              filterAgent={filterAgent}
+              setFilterAgent={setFilterAgent}
+              filterType={filterType}
+              setFilterType={setFilterType}
+              filterStatus={filterStatus}
+              setFilterStatus={setFilterStatus}
+              filteredCount={filteredSteps.length}
+              totalCount={activeSession.steps.length}
+            />
+
             {/* Timeline */}
             <div className="timeline-container" id="timeline">
               <div className="timeline">
@@ -847,6 +1301,7 @@ export default function AgentLensApp() {
                     step={step}
                     index={i}
                     active={step.id === activeStepId}
+                    dimmed={hasActiveFilters && !filteredStepIds.has(step.id)}
                     onClick={() => {
                       setActiveStepId(step.id);
                       setPlaybackIndex(i);
@@ -866,14 +1321,14 @@ export default function AgentLensApp() {
                   setPlaybackIndex(0);
                   setActiveStepId(activeSession.steps[0]?.id || null);
                 }}
-                title="Reset"
+                title="Reset (R)"
               >
                 ⟲
               </button>
               <button
                 className={`playback-btn ${isPlaying ? 'playing' : ''}`}
                 onClick={togglePlayback}
-                title={isPlaying ? 'Pause' : 'Play'}
+                title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
                 id="play-btn"
               >
                 {isPlaying ? '⏸' : '▶'}
@@ -886,7 +1341,7 @@ export default function AgentLensApp() {
                   setPlaybackIndex(nextIdx);
                   setActiveStepId(activeSession.steps[nextIdx].id);
                 }}
-                title="Next Step"
+                title="Next Step (→)"
               >
                 ⏭
               </button>
