@@ -127,10 +127,13 @@ Open [http://localhost:3000](http://localhost:3000) — the app ships with built
 
 ## 🗺️ Roadmap
 
+- [x] Run comparison (diff view) ✅
+- [x] Export traces to JSON ✅
+- [x] Search & filter timeline ✅
+- [x] Keyboard shortcuts ✅
 - [ ] Live proxy interceptor (zero-code-change capture)
 - [ ] WebSocket real-time trace streaming
-- [ ] Run comparison (diff view)
-- [ ] Export traces to JSON/OpenTelemetry
+- [ ] OpenTelemetry export format
 - [ ] LangGraph / CrewAI / AutoGen integrations
 - [ ] Budget alerts and automatic agent halting
 - [ ] Team collaboration (shared traces)
