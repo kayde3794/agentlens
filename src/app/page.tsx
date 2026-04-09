@@ -760,6 +760,222 @@ function CostDashboard({ session }: { session: TraceSession }) {
   );
 }
 
+// ─── Budget Alerts Panel ────────────────────────────────────────────────────
+function BudgetAlerts({
+  session,
+  budgetLimit,
+  setBudgetLimit,
+  tokenLimit,
+  setTokenLimit,
+}: {
+  session: TraceSession;
+  budgetLimit: number;
+  setBudgetLimit: (v: number) => void;
+  tokenLimit: number;
+  setTokenLimit: (v: number) => void;
+}) {
+  const costPercent = budgetLimit > 0 ? (session.total_cost / budgetLimit) * 100 : 0;
+  const tokenPercent = tokenLimit > 0 ? (session.total_tokens / tokenLimit) * 100 : 0;
+  const costStatus = costPercent >= 100 ? 'critical' : costPercent >= 80 ? 'warning' : 'ok';
+  const tokenStatus = tokenPercent >= 100 ? 'critical' : tokenPercent >= 80 ? 'warning' : 'ok';
+
+  // Per-agent budget analysis
+  const hotAgent = session.agents.reduce((max, a) => a.total_cost > max.total_cost ? a : max, session.agents[0]);
+  const hotAgentPercent = budgetLimit > 0 ? (hotAgent.total_cost / budgetLimit) * 100 : 0;
+
+  // Anomaly cost projection
+  const avgCostPerStep = session.total_cost / session.total_steps;
+  const projectedCost50 = avgCostPerStep * 50;
+  const projectedCost100 = avgCostPerStep * 100;
+
+  return (
+    <div className="inspector-content">
+      {/* Budget Gauges */}
+      <div className="budget-gauges animate-in">
+        <div className={`budget-gauge ${costStatus}`}>
+          <div className="budget-gauge-header">
+            <span className="budget-gauge-label">💰 Cost Budget</span>
+            <span className={`budget-gauge-status ${costStatus}`}>
+              {costStatus === 'critical' ? '🚨 EXCEEDED' : costStatus === 'warning' ? '⚠️ WARNING' : '✅ OK'}
+            </span>
+          </div>
+          <div className="budget-gauge-bar-container">
+            <div
+              className={`budget-gauge-bar ${costStatus}`}
+              style={{ width: `${Math.min(costPercent, 100)}%` }}
+            />
+            {costPercent > 100 && (
+              <div className="budget-gauge-overflow" style={{ width: `${Math.min(costPercent - 100, 100)}%` }} />
+            )}
+          </div>
+          <div className="budget-gauge-values">
+            <span>{formatCost(session.total_cost)}</span>
+            <span>/ {formatCost(budgetLimit)}</span>
+          </div>
+          <div className="budget-input-row">
+            <label>Limit: $</label>
+            <input
+              type="number"
+              className="budget-input"
+              value={budgetLimit}
+              step={0.01}
+              min={0}
+              onChange={e => setBudgetLimit(parseFloat(e.target.value) || 0)}
+            />
+          </div>
+        </div>
+
+        <div className={`budget-gauge ${tokenStatus}`}>
+          <div className="budget-gauge-header">
+            <span className="budget-gauge-label">🧠 Token Budget</span>
+            <span className={`budget-gauge-status ${tokenStatus}`}>
+              {tokenStatus === 'critical' ? '🚨 EXCEEDED' : tokenStatus === 'warning' ? '⚠️ WARNING' : '✅ OK'}
+            </span>
+          </div>
+          <div className="budget-gauge-bar-container">
+            <div
+              className={`budget-gauge-bar ${tokenStatus}`}
+              style={{ width: `${Math.min(tokenPercent, 100)}%` }}
+            />
+          </div>
+          <div className="budget-gauge-values">
+            <span>{formatTokens(session.total_tokens)}</span>
+            <span>/ {formatTokens(tokenLimit)}</span>
+          </div>
+          <div className="budget-input-row">
+            <label>Limit:</label>
+            <input
+              type="number"
+              className="budget-input"
+              value={tokenLimit}
+              step={1000}
+              min={0}
+              onChange={e => setTokenLimit(parseInt(e.target.value) || 0)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Alerts Log */}
+      <div className="data-section animate-in" style={{ animationDelay: '200ms' }}>
+        <div className="data-section-header">
+          <span className="data-section-title">Active Alerts</span>
+          <span className="data-section-badge" style={{
+            color: (costStatus !== 'ok' || tokenStatus !== 'ok') ? 'var(--accent-red)' : 'var(--accent-emerald)',
+            background: (costStatus !== 'ok' || tokenStatus !== 'ok') ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)',
+          }}>
+            {costStatus !== 'ok' || tokenStatus !== 'ok' ? 'Action Required' : 'All Clear'}
+          </span>
+        </div>
+        <div className="budget-alerts-list">
+          {costStatus === 'critical' && (
+            <div className="budget-alert critical">
+              <span className="budget-alert-icon">🚨</span>
+              <div>
+                <div className="budget-alert-title">Cost budget exceeded!</div>
+                <div className="budget-alert-desc">
+                  Session cost ({formatCost(session.total_cost)}) has exceeded the budget of {formatCost(budgetLimit)}.
+                  Agent <strong style={{ color: hotAgent.color }}>{hotAgent.name}</strong> is the highest spender ({formatCost(hotAgent.total_cost)}, {hotAgentPercent.toFixed(0)}% of budget).
+                </div>
+              </div>
+            </div>
+          )}
+          {costStatus === 'warning' && (
+            <div className="budget-alert warning">
+              <span className="budget-alert-icon">⚠️</span>
+              <div>
+                <div className="budget-alert-title">Approaching cost limit</div>
+                <div className="budget-alert-desc">
+                  Session is at {costPercent.toFixed(0)}% of the {formatCost(budgetLimit)} budget.
+                  At current rate, {Math.ceil((budgetLimit - session.total_cost) / avgCostPerStep)} more steps before limit.
+                </div>
+              </div>
+            </div>
+          )}
+          {tokenStatus === 'critical' && (
+            <div className="budget-alert critical">
+              <span className="budget-alert-icon">🚨</span>
+              <div>
+                <div className="budget-alert-title">Token budget exceeded!</div>
+                <div className="budget-alert-desc">
+                  Used {formatTokens(session.total_tokens)} tokens vs limit of {formatTokens(tokenLimit)}.
+                  Agent halting recommended.
+                </div>
+              </div>
+            </div>
+          )}
+          {tokenStatus === 'warning' && (
+            <div className="budget-alert warning">
+              <span className="budget-alert-icon">⚠️</span>
+              <div>
+                <div className="budget-alert-title">Approaching token limit</div>
+                <div className="budget-alert-desc">
+                  Token usage at {tokenPercent.toFixed(0)}% of budget ({formatTokens(session.total_tokens)} / {formatTokens(tokenLimit)}).
+                </div>
+              </div>
+            </div>
+          )}
+          {session.anomaly_count > 0 && (
+            <div className="budget-alert warning">
+              <span className="budget-alert-icon">🔄</span>
+              <div>
+                <div className="budget-alert-title">Anomalies detected</div>
+                <div className="budget-alert-desc">
+                  {session.anomaly_count} anomalies in this session. Review timeline for details.
+                </div>
+              </div>
+            </div>
+          )}
+          {costStatus === 'ok' && tokenStatus === 'ok' && session.anomaly_count === 0 && (
+            <div className="budget-alert ok">
+              <span className="budget-alert-icon">✅</span>
+              <div>
+                <div className="budget-alert-title">All systems normal</div>
+                <div className="budget-alert-desc">
+                  Cost and token usage within budgets. No anomalies detected.
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Cost Projection */}
+      <div className="data-section animate-in" style={{ animationDelay: '300ms' }}>
+        <div className="data-section-header">
+          <span className="data-section-title">Cost Projection</span>
+        </div>
+        <div className="data-block">
+          <div className="data-kv-row">
+            <span className="data-kv-key">Avg/Step</span>
+            <span className="data-kv-value cost">{formatCost(avgCostPerStep)}</span>
+          </div>
+          <div className="data-kv-row">
+            <span className="data-kv-key">@ 50 steps</span>
+            <span className="data-kv-value" style={{ color: projectedCost50 > budgetLimit && budgetLimit > 0 ? 'var(--accent-red)' : 'var(--text-secondary)' }}>
+              {formatCost(projectedCost50)}
+              {projectedCost50 > budgetLimit && budgetLimit > 0 && ' ⚠️ over budget'}
+            </span>
+          </div>
+          <div className="data-kv-row">
+            <span className="data-kv-key">@ 100 steps</span>
+            <span className="data-kv-value" style={{ color: projectedCost100 > budgetLimit && budgetLimit > 0 ? 'var(--accent-red)' : 'var(--text-secondary)' }}>
+              {formatCost(projectedCost100)}
+              {projectedCost100 > budgetLimit && budgetLimit > 0 && ' 🚨 over budget'}
+            </span>
+          </div>
+          <div className="data-kv-row">
+            <span className="data-kv-key">Top Spender</span>
+            <span className="data-kv-value" style={{ color: hotAgent.color }}>
+              {hotAgent.name} ({formatCost(hotAgent.total_cost)})
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Compare View Component ─────────────────────────────────────────────────
 function CompareView({
   sessions,
@@ -941,10 +1157,16 @@ export default function AgentLensApp() {
   const [activeStepId, setActiveStepId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackIndex, setPlaybackIndex] = useState(0);
-  const [rightPanel, setRightPanel] = useState<'inspector' | 'cost'>('inspector');
+  const [rightPanel, setRightPanel] = useState<'inspector' | 'cost' | 'budget'>('inspector');
   const [showCompare, setShowCompare] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [budgetLimit, setBudgetLimit] = useState(0.10);
+  const [tokenLimit, setTokenLimit] = useState(10000);
+  const [isLiveStreaming, setIsLiveStreaming] = useState(false);
+  const [liveStreamIndex, setLiveStreamIndex] = useState(0);
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const liveStreamRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   // Filter state
@@ -1031,7 +1253,17 @@ export default function AgentLensApp() {
     setFilterStatus('');
   }, [activeSessionId, stopPlayback]);
 
-  // Export trace to JSON
+  // Export functions
+  const downloadBlob = useCallback((content: string, filename: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
   const exportTraceJSON = useCallback(() => {
     if (!activeSession) return;
     const data = {
@@ -1051,13 +1283,84 @@ export default function AgentLensApp() {
         steps: activeSession.steps,
       },
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `agentlens-trace-${activeSession.id}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(JSON.stringify(data, null, 2), `agentlens-trace-${activeSession.id}.json`, 'application/json');
+    setShowExportMenu(false);
+  }, [activeSession, downloadBlob]);
+
+  const exportTraceOTel = useCallback(() => {
+    if (!activeSession) return;
+    // OpenTelemetry-compatible trace format
+    const otelTrace = {
+      resourceSpans: [{
+        resource: {
+          attributes: [
+            { key: 'service.name', value: { stringValue: 'agentlens' } },
+            { key: 'service.version', value: { stringValue: '1.0.0' } },
+            { key: 'agentlens.session.id', value: { stringValue: activeSession.id } },
+            { key: 'agentlens.session.name', value: { stringValue: activeSession.name } },
+          ],
+        },
+        scopeSpans: [{
+          scope: { name: 'agentlens.tracer', version: '1.0.0' },
+          spans: activeSession.steps.map((step, i) => ({
+            traceId: activeSession.id.replace(/-/g, '').padEnd(32, '0'),
+            spanId: step.id.replace(/-/g, '').substring(0, 16),
+            parentSpanId: i > 0 ? activeSession.steps[i - 1].id.replace(/-/g, '').substring(0, 16) : undefined,
+            name: `${step.agent_name}.${step.step_type}`,
+            kind: step.step_type === 'llm_call' ? 3 : 1,
+            startTimeUnixNano: new Date(step.timestamp).getTime() * 1e6,
+            endTimeUnixNano: (new Date(step.timestamp).getTime() + step.duration_ms) * 1e6,
+            status: { code: step.status === 'error' ? 2 : 1 },
+            attributes: [
+              { key: 'agent.name', value: { stringValue: step.agent_name } },
+              { key: 'step.type', value: { stringValue: step.step_type } },
+              { key: 'step.status', value: { stringValue: step.status } },
+              { key: 'duration_ms', value: { intValue: step.duration_ms } },
+              ...(step.model ? [{ key: 'llm.model', value: { stringValue: step.model } }] : []),
+              ...(step.provider ? [{ key: 'llm.provider', value: { stringValue: step.provider } }] : []),
+              ...(step.tokens ? [
+                { key: 'llm.token_count.prompt', value: { intValue: step.tokens.prompt_tokens } },
+                { key: 'llm.token_count.completion', value: { intValue: step.tokens.completion_tokens } },
+              ] : []),
+              ...(step.cost ? [{ key: 'llm.cost', value: { doubleValue: step.cost.total_cost } }] : []),
+              ...(step.tool_name ? [{ key: 'tool.name', value: { stringValue: step.tool_name } }] : []),
+            ],
+          })),
+        }],
+      }],
+    };
+    downloadBlob(JSON.stringify(otelTrace, null, 2), `agentlens-otel-${activeSession.id}.json`, 'application/json');
+    setShowExportMenu(false);
+  }, [activeSession, downloadBlob]);
+
+  // Live streaming simulation
+  const startLiveStream = useCallback(() => {
+    if (!activeSession) return;
+    setIsLiveStreaming(true);
+    setLiveStreamIndex(0);
+    setActiveStepId(null);
+    let idx = 0;
+
+    liveStreamRef.current = setInterval(() => {
+      if (idx >= activeSession.steps.length) {
+        if (liveStreamRef.current) clearInterval(liveStreamRef.current);
+        setIsLiveStreaming(false);
+        return;
+      }
+      setLiveStreamIndex(idx + 1);
+      setActiveStepId(activeSession.steps[idx].id);
+      setPlaybackIndex(idx);
+      idx++;
+    }, 800 + Math.random() * 600);
+  }, [activeSession]);
+
+  const stopLiveStream = useCallback(() => {
+    if (liveStreamRef.current) {
+      clearInterval(liveStreamRef.current);
+      liveStreamRef.current = null;
+    }
+    setIsLiveStreaming(false);
+    if (activeSession) setLiveStreamIndex(activeSession.steps.length);
   }, [activeSession]);
 
   // Keyboard shortcuts
@@ -1165,12 +1468,30 @@ export default function AgentLensApp() {
             ⌨️ Shortcuts
           </div>
           <div
-            className="header-badge clickable"
+            className="header-badge clickable live-stream-btn"
             style={{ cursor: 'pointer' }}
-            onClick={exportTraceJSON}
-            title="Export trace as JSON (E)"
+            onClick={isLiveStreaming ? stopLiveStream : startLiveStream}
+            title="Simulate real-time trace streaming"
+          >
+            {isLiveStreaming ? '⏹️ Stop Stream' : '📡 Live Stream'}
+          </div>
+          <div
+            className="header-badge clickable"
+            style={{ cursor: 'pointer', position: 'relative' }}
+            onClick={() => setShowExportMenu(!showExportMenu)}
+            title="Export trace (E)"
           >
             📥 Export
+            {showExportMenu && (
+              <div className="export-dropdown">
+                <div className="export-dropdown-item" onClick={(e) => { e.stopPropagation(); exportTraceJSON(); }}>
+                  <span>📄</span> JSON (AgentLens)
+                </div>
+                <div className="export-dropdown-item" onClick={(e) => { e.stopPropagation(); exportTraceOTel(); }}>
+                  <span>🔭</span> OpenTelemetry
+                </div>
+              </div>
+            )}
           </div>
           <div
             className="header-badge clickable"
@@ -1188,6 +1509,14 @@ export default function AgentLensApp() {
             title="Toggle Cost Dashboard (C)"
           >
             💰 {rightPanel === 'cost' ? 'Inspector' : 'Cost Dashboard'}
+          </div>
+          <div
+            className={`header-badge clickable ${rightPanel === 'budget' ? 'active-badge' : ''}`}
+            style={{ cursor: 'pointer' }}
+            onClick={() => setRightPanel(rightPanel === 'budget' ? 'inspector' : 'budget')}
+            title="Budget Alerts (B)"
+          >
+            🚨 Budget
           </div>
         </div>
       </header>
@@ -1379,10 +1708,10 @@ export default function AgentLensApp() {
         )}
       </div>
 
-      {/* ─── Right Panel: Inspector or Cost Dashboard ─── */}
+      {/* ─── Right Panel: Inspector, Cost Dashboard, or Budget ─── */}
       {rightPanel === 'inspector' ? (
         <InspectorPanel step={activeStep} session={activeSession} />
-      ) : activeSession ? (
+      ) : rightPanel === 'cost' && activeSession ? (
         <div className="inspector">
           <div className="inspector-header">
             <span className="inspector-title">💰 Cost Dashboard</span>
@@ -1394,6 +1723,25 @@ export default function AgentLensApp() {
             </span>
           </div>
           <CostDashboard session={activeSession} />
+        </div>
+      ) : rightPanel === 'budget' && activeSession ? (
+        <div className="inspector">
+          <div className="inspector-header">
+            <span className="inspector-title">🚨 Budget Alerts</span>
+            <span
+              style={{ cursor: 'pointer', fontSize: 12, color: 'var(--text-tertiary)' }}
+              onClick={() => setRightPanel('inspector')}
+            >
+              ← Inspector
+            </span>
+          </div>
+          <BudgetAlerts
+            session={activeSession}
+            budgetLimit={budgetLimit}
+            setBudgetLimit={setBudgetLimit}
+            tokenLimit={tokenLimit}
+            setTokenLimit={setTokenLimit}
+          />
         </div>
       ) : (
         <InspectorPanel step={null} session={null} />

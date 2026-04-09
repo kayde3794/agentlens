@@ -1,31 +1,35 @@
 import { NextResponse } from 'next/server';
-import { getDemoSessions, getDemoSession } from '@/lib/demo-data';
+import { demoSessions } from '@/lib/demo-data';
+import { traceStore } from '@/lib/trace-store';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const sessionId = searchParams.get('id');
+  const mode = searchParams.get('mode'); // 'live' | 'demo' | 'all'
+
+  // Get sessions based on mode
+  const liveSessions = traceStore.getAllSessions();
 
   if (sessionId) {
-    const session = getDemoSession(sessionId);
-    if (!session) {
-      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
-    }
-    return NextResponse.json(session);
+    // Check live sessions first, then demo
+    const liveSession = liveSessions.find(s => s.id === sessionId);
+    if (liveSession) return NextResponse.json(liveSession);
+
+    const demoSession = demoSessions.find(s => s.id === sessionId);
+    if (demoSession) return NextResponse.json(demoSession);
+
+    return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   }
 
-  // Return all sessions (summary only)
-  const sessions = getDemoSessions().map(s => ({
-    id: s.id,
-    name: s.name,
-    started_at: s.started_at,
-    ended_at: s.ended_at,
-    status: s.status,
-    agent_count: s.agents.length,
-    total_steps: s.total_steps,
-    total_tokens: s.total_tokens,
-    total_cost: s.total_cost,
-    anomaly_count: s.anomaly_count,
-  }));
+  if (mode === 'live') {
+    return NextResponse.json(liveSessions);
+  }
 
-  return NextResponse.json(sessions);
+  if (mode === 'demo') {
+    return NextResponse.json(demoSessions);
+  }
+
+  // Default: return both, live first
+  const allSessions = [...liveSessions, ...demoSessions];
+  return NextResponse.json(allSessions);
 }

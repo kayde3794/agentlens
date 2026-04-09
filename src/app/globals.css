@@ -1677,3 +1677,237 @@ body {
   color: var(--text-secondary);
 }
 
+/* ─── Budget Alerts Panel ────────────────────────────────────────────────── */
+.budget-gauges {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+.budget-gauge {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  transition: all var(--transition-fast);
+}
+.budget-gauge.warning {
+  border-color: rgba(245, 158, 11, 0.3);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.06);
+}
+.budget-gauge.critical {
+  border-color: rgba(239, 68, 68, 0.4);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.1);
+  animation: budgetPulse 2s ease-in-out infinite;
+}
+
+@keyframes budgetPulse {
+  0%, 100% { box-shadow: 0 0 16px rgba(239, 68, 68, 0.1); }
+  50% { box-shadow: 0 0 24px rgba(239, 68, 68, 0.2); }
+}
+
+.budget-gauge-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+
+.budget-gauge-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.budget-gauge-status {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.budget-gauge-status.ok {
+  color: var(--accent-emerald);
+  background: rgba(16, 185, 129, 0.1);
+}
+.budget-gauge-status.warning {
+  color: var(--accent-amber);
+  background: rgba(245, 158, 11, 0.1);
+}
+.budget-gauge-status.critical {
+  color: var(--accent-red);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.budget-gauge-bar-container {
+  height: 8px;
+  background: var(--bg-card);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.budget-gauge-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width var(--transition-base);
+}
+.budget-gauge-bar.ok { background: var(--accent-emerald); }
+.budget-gauge-bar.warning { background: var(--accent-amber); }
+.budget-gauge-bar.critical { background: var(--accent-red); }
+
+.budget-gauge-overflow {
+  height: 100%;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--accent-red),
+    var(--accent-red) 3px,
+    rgba(239, 68, 68, 0.3) 3px,
+    rgba(239, 68, 68, 0.3) 6px
+  );
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-radius: 0 4px 4px 0;
+}
+
+.budget-gauge-values {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-sm);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.budget-input-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.budget-input {
+  width: 90px;
+  padding: 4px 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+.budget-input:focus {
+  border-color: var(--accent-purple);
+  box-shadow: 0 0 0 2px var(--accent-purple-glow);
+}
+
+/* Budget Alert Cards */
+.budget-alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.budget-alert {
+  display: flex;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  animation: fadeInUp 0.3s ease-out;
+}
+.budget-alert.critical {
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+.budget-alert.warning {
+  background: rgba(245, 158, 11, 0.05);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+.budget-alert.ok {
+  background: rgba(16, 185, 129, 0.05);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.budget-alert-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.budget-alert-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.budget-alert-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ─── Export Dropdown ────────────────────────────────────────────────────── */
+.export-dropdown {
+  position: absolute;
+  top: 110%;
+  right: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  min-width: 200px;
+  z-index: 200;
+  overflow: hidden;
+  animation: scaleIn 0.15s ease-out;
+}
+
+.export-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.export-dropdown-item:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+.export-dropdown-item + .export-dropdown-item {
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ─── Live Stream Button ─────────────────────────────────────────────────── */
+.live-stream-btn {
+  position: relative;
+}
+
+.header-badge.clickable.live-stream-btn {
+  color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.10);
+  border-color: rgba(6, 182, 212, 0.20);
+}
+.header-badge.clickable.live-stream-btn:hover {
+  background: rgba(6, 182, 212, 0.18);
+  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.15);
+}
+
+/* ─── Active Header Badge ────────────────────────────────────────────────── */
+.header-badge.active-badge {
+  color: var(--accent-red) !important;
+  background: rgba(239, 68, 68, 0.12) !important;
+  border-color: rgba(239, 68, 68, 0.25) !important;
+}
