@@ -68,6 +68,62 @@ Open [http://localhost:3000](http://localhost:3000) — the app ships with built
 1. **Successful workflow**: A 5-agent LinkedIn blog post pipeline (Orchestrator → Researcher → Writer → Editor → Publisher)
 2. **Failed workflow**: A coding agent caught in an infinite fix-test loop with automatic halt
 
+### 🔗 Connect Your Agents (Python SDK)
+
+```bash
+pip install requests
+```
+
+```python
+from agentlens import AgentLens
+
+# Start a trace session  
+lens = AgentLens(session_name="My Agent Pipeline")
+
+# Option A: Wrap OpenAI (automatic tracing — zero code changes)
+from openai import OpenAI
+client = lens.wrap_openai(OpenAI(), agent_name="MyAgent")
+response = client.chat.completions.create(model="gpt-4o", messages=[...])
+# ^ Every call is now traced in AgentLens!
+
+# Option B: Manual tracing
+lens.trace_llm_call(
+    agent_name="Researcher",
+    model="gpt-4o",
+    prompt="Research this topic...",
+    response="Here are the findings...",
+    tokens={"prompt_tokens": 150, "completion_tokens": 200, "total_tokens": 350},
+)
+
+# Trace tool calls, MCP invocations, agent spawns, decisions, errors
+lens.trace_tool_call(agent_name="Coder", tool_name="file_read", tool_input={"path": "main.py"})
+lens.trace_mcp_call(agent_name="Agent", server_name="web-search", tool_name="search", params={"q": "..."})
+lens.trace_agent_spawn(parent_agent="Orchestrator", spawned_agent="Writer")
+lens.trace_decision(agent_name="Orchestrator", reason="Quality score 9/10, proceeding")
+lens.trace_error(agent_name="Coder", error_message="Test failed: assertion error")
+
+lens.end()  # Mark session complete
+```
+
+> **Note:** Copy `sdk/python/agentlens.py` into your project, or add it to your Python path. The SDK sends traces to `http://localhost:3000/api/ingest` by default.
+
+### 🛠️ REST API (any language)
+
+```bash
+# Send a trace step
+curl -X POST http://localhost:3000/api/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"my-session","session_name":"Test","agent_name":"Agent1","step_type":"llm_call","model":"gpt-4o","prompt":"Hello","response":"Hi there"}'
+
+# End a session
+curl -X POST "http://localhost:3000/api/ingest?action=end" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"my-session","status":"completed"}'
+
+# Get all live sessions
+curl http://localhost:3000/api/ingest
+```
+
 ---
 
 ## 🏗️ Architecture
@@ -131,13 +187,15 @@ Open [http://localhost:3000](http://localhost:3000) — the app ships with built
 - [x] Export traces to JSON ✅
 - [x] Search & filter timeline ✅
 - [x] Keyboard shortcuts ✅
-- [ ] Live proxy interceptor (zero-code-change capture)
+- [x] OpenTelemetry export format ✅
+- [x] Budget alerts & cost projections ✅
+- [x] Live streaming simulation ✅
+- [x] Python SDK & REST API ✅
 - [ ] WebSocket real-time trace streaming
-- [ ] OpenTelemetry export format
-- [ ] LangGraph / CrewAI / AutoGen integrations
-- [ ] Budget alerts and automatic agent halting
+- [ ] LangGraph / CrewAI / AutoGen framework adapters
 - [ ] Team collaboration (shared traces)
 - [ ] VS Code extension
+- [ ] npm package (`npm install agentlens`)
 
 ---
 
