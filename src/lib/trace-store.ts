@@ -1,48 +1,170 @@
-// ─── In-Memory Trace Store ──────────────────────────────────────────────────
-// Stores live traces received from the SDK. In production, replace with SQLite/Postgres.
+// ─── Storage Configuration ──────────────────────────────────────────────────
+// Production-grade controls for sampling, TTL, and storage limits.
 
-import type { TraceSession, TraceStep, AgentInfo, TokenUsage, CostBreakdown } from './types';
-import { calculateCost } from './types';
+export interface StorageConfig {
+  /** Sampling rate: 0.0–1.0. 1.0 = capture everything, 0.1 = capture 10%.
+   *  Anomalies and errors are ALWAYS captured regardless of sampling rate. */
+  samplingRate: number;
 
-// Agent color palette for auto-assignment
-const AGENT_COLORS = [
-  '#8b5cf6', '#06b6d4', '#f59e0b', '#10b981', '#ef4444',
-  '#3b82f6', '#ec4899', '#14b8a6', '#f97316', '#a855f7',
-];
+  /** Time-to-live in milliseconds. Sessions older than this are auto-purged.
+   *  Default: 24 hours. Set to 0 for unlimited. */
+  ttlMs: number;
 
-interface RawStep {
-  session_id: string;
-  session_name?: string;
-  agent_name: string;
-  step_type: string;
-  status?: string;
-  timestamp?: string;
-  duration_ms?: number;
-  provider?: string;
-  model?: string;
-  prompt?: string;
-  system_prompt?: string;
-  response?: string;
-  temperature?: number;
-  tokens?: TokenUsage;
-  tool_name?: string;
-  tool_input?: Record<string, unknown>;
-  tool_output?: unknown;
-  mcp_server?: string;
-  mcp_tool?: string;
-  mcp_params?: Record<string, unknown>;
-  mcp_result?: unknown;
-  spawned_agent?: string;
-  decision_reason?: string;
-  error_message?: string;
-  error_type?: string;
+  /** Maximum number of sessions to keep. Oldest sessions are evicted first.
+   *  Default: 100. Set to 0 for unlimited. */
+  maxSessions: number;
+
+  /** Maximum steps per session. Beyond this, only anomalies/errors are kept.
+   *  Default: 500. Set to 0 for unlimited. */
+  maxStepsPerSession: number;
+
+  /** Whether to store full prompt/response payloads.
+   *  Set to false in production to cut storage 10-20x.
+   *  Cost/token data is always stored regardless. */
+  storePayloads: boolean;
+
+  /** Max characters to store per prompt/response when storePayloads is true.
+   *  Truncates long payloads. Default: 2000. Set to 0 for unlimited. */
+  maxPayloadChars: number;
+
+  /** Auto-cleanup interval in milliseconds. Default: 60000 (1 min). */
+  cleanupIntervalMs: number;
 }
+
+const DEFAULT_CONFIG: StorageConfig = {
+  samplingRate: 1.0,       // capture everything (dev mode)
+  ttlMs: 24 * 60 * 60 * 1000, // 24 hours
+  maxSessions: 100,
+  maxStepsPerSession: 500,
+  storePayloads: true,
+  maxPayloadChars: 2000,
+  cleanupIntervalMs: 60000,
+};
 
 class TraceStore {
   private sessions: Map<string, TraceSession> = new Map();
   private agentColorMap: Map<string, string> = new Map();
   private colorIndex = 0;
   private listeners: Set<(event: string, data: unknown) => void> = new Set();
+  private config: StorageConfig;
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+  private sampledOutSessions: Set<string> = new Set();
+
+  /** Stats for monitoring storage health */
+  public stats = {
+    totalIngestedSteps: 0,
+    totalDroppedBySampling: 0,
+    totalDroppedByTTL: 0,
+    totalTruncatedPayloads: 0,
+  };
+
+  constructor(config?: Partial<StorageConfig>) {
+    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.startCleanupLoop();
+  }
+
+  /** Update configuration at runtime */
+  configure(updates: Partial<StorageConfig>) {
+    this.config = { ...this.config, ...updates };
+    // Restart cleanup loop with new interval
+    this.startCleanupLoop();
+  }
+
+  /** Get current configuration */
+  getConfig(): StorageConfig {
+    return { ...this.config };
+  }
+
+  /** Get storage stats */
+  getStats() {
+    return {
+      ...this.stats,
+      activeSessions: this.sessions.size,
+      totalStepsStored: Array.from(this.sessions.values()).reduce((s, sess) => s + sess.steps.length, 0),
+      activeListeners: this.listeners.size,
+    };
+  }
+
+  private startCleanupLoop() {
+    if (this.cleanupTimer) clearInterval(this.cleanupTimer);
+    if (this.config.cleanupIntervalMs > 0) {
+      this.cleanupTimer = setInterval(() => this.cleanup(), this.config.cleanupIntervalMs);
+    }
+  }
+
+  /** Remove expired sessions (TTL) and enforce maxSessions */
+  cleanup() {
+    const now = Date.now();
+    let purgedCount = 0;
+
+    // TTL expiry
+    if (this.config.ttlMs > 0) {
+      for (const [id, session] of this.sessions) {
+        const sessionAge = now - new Date(session.started_at).getTime();
+        if (sessionAge > this.config.ttlMs) {
+          this.sessions.delete(id);
+          purgedCount++;
+        }
+      }
+    }
+
+    // Max sessions enforcement (evict oldest)
+    if (this.config.maxSessions > 0 && this.sessions.size > this.config.maxSessions) {
+      const sorted = Array.from(this.sessions.entries())
+        .sort((a, b) => new Date(a[1].started_at).getTime() - new Date(b[1].started_at).getTime());
+
+      const toRemove = sorted.slice(0, this.sessions.size - this.config.maxSessions);
+      for (const [id] of toRemove) {
+        this.sessions.delete(id);
+        purgedCount++;
+      }
+    }
+
+    this.stats.totalDroppedByTTL += purgedCount;
+
+    if (purgedCount > 0) {
+      this.emit('storage:cleanup', { purged: purgedCount, remaining: this.sessions.size });
+    }
+  }
+
+  /** Determine if a session should be sampled (captured) */
+  private shouldSample(sessionId: string, raw: RawStep): boolean {
+    // Always capture errors and anomalous sessions  
+    if (raw.status === 'error' || raw.error_message) return true;
+
+    // If we already decided to drop this session, keep dropping
+    if (this.sampledOutSessions.has(sessionId)) return false;
+
+    // If session already exists, continue capturing it
+    if (this.sessions.has(sessionId)) return true;
+
+    // New session — apply sampling rate
+    if (this.config.samplingRate >= 1.0) return true;
+    if (this.config.samplingRate <= 0) {
+      this.sampledOutSessions.add(sessionId);
+      return false;
+    }
+
+    const sampled = Math.random() < this.config.samplingRate;
+    if (!sampled) {
+      this.sampledOutSessions.add(sessionId);
+    }
+    return sampled;
+  }
+
+  /** Truncate a string payload to configured max length */
+  private truncatePayload(text: string | undefined): string | undefined {
+    if (!text) return text;
+    if (!this.config.storePayloads) {
+      this.stats.totalTruncatedPayloads++;
+      return undefined; // Strip payload entirely
+    }
+    if (this.config.maxPayloadChars > 0 && text.length > this.config.maxPayloadChars) {
+      this.stats.totalTruncatedPayloads++;
+      return text.substring(0, this.config.maxPayloadChars) + `... [truncated at ${this.config.maxPayloadChars} chars]`;
+    }
+    return text;
+  }
 
   /** Subscribe to real-time trace events */
   subscribe(listener: (event: string, data: unknown) => void) {
@@ -65,6 +187,29 @@ class TraceStore {
   ingestStep(raw: RawStep): TraceStep {
     const sessionId = raw.session_id;
     const now = new Date().toISOString();
+    this.stats.totalIngestedSteps++;
+
+    // ─── Sampling gate ──────────────────────────────────────────────────
+    if (!this.shouldSample(sessionId, raw)) {
+      this.stats.totalDroppedBySampling++;
+      // Return a minimal step (not stored) so the SDK doesn't break
+      return {
+        id: `${sessionId}-dropped`,
+        session_id: sessionId,
+        agent_name: raw.agent_name,
+        agent_color: '#666',
+        step_index: -1,
+        step_type: (raw.step_type || 'llm_call') as TraceStep['step_type'],
+        status: 'success' as TraceStep['status'],
+        timestamp: now,
+        duration_ms: 0,
+      };
+    }
+
+    // ─── Payload truncation ─────────────────────────────────────────────
+    raw.prompt = this.truncatePayload(raw.prompt);
+    raw.system_prompt = this.truncatePayload(raw.system_prompt);
+    raw.response = this.truncatePayload(raw.response);
 
     // Create session if it doesn't exist
     const isNewSession = !this.sessions.has(sessionId);
@@ -133,9 +278,16 @@ class TraceStore {
       };
     }
 
-    // Add step to session
-    session.steps.push(step);
-    session.total_steps = session.steps.length;
+    // Add step to session (with maxStepsPerSession enforcement)
+    const overStepLimit = this.config.maxStepsPerSession > 0 &&
+      session.steps.length >= this.config.maxStepsPerSession;
+    const isImportantStep = step.status === 'error' || (step.anomalies && step.anomalies.length > 0);
+
+    if (!overStepLimit || isImportantStep) {
+      session.steps.push(step);
+    }
+    // Always update counters even if step was dropped from storage
+    session.total_steps++;
     session.total_duration_ms += step.duration_ms;
     if (step.tokens) {
       session.total_tokens += step.tokens.total_tokens;
