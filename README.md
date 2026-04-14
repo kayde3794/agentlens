@@ -91,7 +91,25 @@ client = lens.wrap_openai(OpenAI(), agent_name="MyAgent")
 response = client.chat.completions.create(model="gpt-4o", messages=[...])
 # ^ Every call is now traced in AgentLens!
 
-# Option B: Manual tracing
+# Option B: Wrap Anthropic (Claude)
+from anthropic import Anthropic
+client = lens.wrap_anthropic(Anthropic(), agent_name="ClaudeAgent")
+response = client.messages.create(model="claude-4-sonnet", max_tokens=1024, messages=[...])
+
+# Option C: Wrap Google Gemini
+import google.generativeai as genai
+model = lens.wrap_google(genai.GenerativeModel("gemini-2.5-flash"), agent_name="GeminiAgent")
+response = model.generate_content("Explain quantum computing")
+
+# Option D: Wrap Ollama (local LLMs — no package needed)
+ollama = lens.wrap_ollama(agent_name="LocalLLM")
+response = ollama.chat(model="llama3", messages=[{"role": "user", "content": "Hello!"}])
+
+# Option E: Wrap LiteLLM (any provider via proxy)
+import litellm
+litellm.callbacks = [lens.wrap_litellm(agent_name="MultiModel")]
+
+# Option F: Manual tracing
 lens.trace_llm_call(
     agent_name="Researcher",
     model="gpt-4o",
@@ -165,13 +183,74 @@ curl http://localhost:3000/api/ingest
 
 ## 📊 Supported Providers & Models
 
-| Provider | Models | Cost Tracking |
-|:---------|:-------|:-------------|
-| **OpenAI** | GPT-4o, GPT-4o-mini, GPT-4-turbo | ✅ |
-| **Anthropic** | Claude 4 Opus/Sonnet, Claude 3.5 Sonnet | ✅ |
-| **Google** | Gemini 2.0/2.5 Flash/Pro | ✅ |
-| **Ollama** | Llama 3, DeepSeek, Mistral | ✅ (free) |
-| **Custom** | Any OpenAI-compatible API | ✅ (configurable) |
+| Provider | Models | Auto-Wrap | Cost Tracking |
+|:---------|:-------|:----------|:-------------|
+| **OpenAI** | GPT-4o, GPT-4o-mini, o1, o3 | `wrap_openai()` | ✅ |
+| **Anthropic** | Claude 4 Opus/Sonnet, Claude 3.5 | `wrap_anthropic()` | ✅ |
+| **Google** | Gemini 2.0/2.5 Flash/Pro | `wrap_google()` | ✅ |
+| **Ollama** | Llama 3, DeepSeek, Mistral, CodeLlama | `wrap_ollama()` | ✅ (free) |
+| **LiteLLM** | Any provider via LiteLLM proxy | `wrap_litellm()` | ✅ |
+| **Custom** | Any OpenAI-compatible API | Manual | ✅ (configurable) |
+
+---
+
+## 🔌 MCPlex Integration
+
+AgentLens pairs with [MCPlex](https://github.com/ModernOps888/mcplex) to create a complete agent toolkit:
+- **MCPlex** = execution layer (routes, secures, caches MCP tools)
+- **AgentLens** = observability layer (traces, debugs, replays, alerts)
+
+Enable the bridge in MCPlex's `mcplex.toml`:
+
+```toml
+[agentlens]
+enabled = true
+url = "http://127.0.0.1:3000/api/ingest"
+session_name = "MCPlex Gateway"
+```
+
+Every tool call through MCPlex now appears as a traced step in AgentLens's timeline. Both tools work 100% independently — the bridge is opt-in.
+
+---
+
+## 💻 IDE Integration (MCP Server)
+
+AgentLens exposes an MCP server so IDE agents (Antigravity, Claude Code, Cursor, Windsurf) can query traces:
+
+```json
+{
+  "mcpServers": {
+    "agentlens": {
+      "command": "node",
+      "args": ["path/to/agentlens/src/mcp-server-entry.mts"],
+      "env": { "AGENTLENS_URL": "http://127.0.0.1:3000" }
+    }
+  }
+}
+```
+
+**Available tools:**
+
+| Tool | Description |
+|------|-------------|
+| `agentlens_list_sessions` | List recent sessions with cost/anomaly summary |
+| `agentlens_get_session` | Full session with all steps |
+| `agentlens_search_traces` | Cross-session search by text, agent, type |
+| `agentlens_get_anomalies` | All detected anomalies |
+| `agentlens_get_cost_summary` | Cost breakdown by agent/model/provider |
+
+---
+
+## 🐳 Docker
+
+```bash
+# Run AgentLens standalone
+docker build -t agentlens .
+docker run -p 3000:3000 agentlens
+
+# Run AgentLens + MCPlex together
+docker-compose up
+```
 
 ---
 
@@ -201,6 +280,16 @@ curl http://localhost:3000/api/ingest
 - [x] Team collaboration (shared traces) ✅
 - [x] VS Code extension ✅
 - [x] npm package (`agentlens-sdk`) ✅
+- [x] Anthropic (Claude) auto-tracing ✅
+- [x] Google (Gemini) auto-tracing ✅
+- [x] Ollama local LLM tracing ✅
+- [x] LiteLLM universal proxy tracing ✅
+- [x] Google ADK adapter ✅
+- [x] MCPlex integration bridge ✅
+- [x] MCP server for IDE agents ✅
+- [x] Cross-session search API ✅
+- [x] Docker & docker-compose ✅
+- [x] Async Python SDK (aiohttp) ✅
 
 ---
 

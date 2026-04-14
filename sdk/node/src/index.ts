@@ -2,6 +2,7 @@
  * AgentLens Node.js/TypeScript SDK
  *
  * Trace your AI agents with one line of code.
+ * Supports: OpenAI, Anthropic (Claude), Google (Gemini), and any provider via manual tracing.
  *
  * @example
  * ```typescript
@@ -12,6 +13,14 @@
  * // Automatic OpenAI wrapping
  * const client = lens.wrapOpenAI(new OpenAI());
  * const response = await client.chat.completions.create({ model: 'gpt-4o', messages: [...] });
+ *
+ * // Automatic Anthropic (Claude) wrapping
+ * const claude = lens.wrapAnthropic(new Anthropic());
+ * const msg = await claude.messages.create({ model: 'claude-4-sonnet', max_tokens: 1024, messages: [...] });
+ *
+ * // Automatic Google Gemini wrapping
+ * const model = lens.wrapGoogle(genAI.getGenerativeModel({ model: 'gemini-2.5-flash' }));
+ * const result = await model.generateContent('Explain quantum computing');
  *
  * // Manual tracing
  * await lens.traceLLMCall({ agentName: 'Agent', model: 'gpt-4o', prompt: '...', response: '...' });
@@ -95,6 +104,8 @@ export class AgentLens {
       return { ok: false, error: String(err) };
     }
   }
+
+  // ─── Core Trace Methods ─────────────────────────────────────────────
 
   /** Trace an LLM API call */
   async traceLLMCall(opts: LLMCallOptions): Promise<Record<string, unknown>> {
@@ -190,25 +201,7 @@ export class AgentLens {
     return this.send({ session_id: this.sessionId, status }, 'end');
   }
 
-  /** Subscribe to real-time trace events via SSE */
-  connectStream(onEvent: (event: string, data: unknown) => void): () => void {
-    const eventSource = new EventSource(`${this.serverUrl}/api/stream`);
-
-    eventSource.addEventListener('step:new', (e) => {
-      onEvent('step:new', JSON.parse(e.data));
-    });
-    eventSource.addEventListener('session:new', (e) => {
-      onEvent('session:new', JSON.parse(e.data));
-    });
-    eventSource.addEventListener('session:end', (e) => {
-      onEvent('session:end', JSON.parse(e.data));
-    });
-    eventSource.addEventListener('session:update', (e) => {
-      onEvent('session:update', JSON.parse(e.data));
-    });
-
-    return () => eventSource.close();
-  }
+  // ─── OpenAI Client Wrapper ──────────────────────────────────────────
 
   /**
    * Wrap an OpenAI client instance to auto-trace all chat completions.
@@ -278,6 +271,235 @@ export class AgentLens {
     }
 
     return client;
+  }
+
+  // ─── Anthropic (Claude) Client Wrapper ──────────────────────────────
+
+  /**
+   * Wrap an Anthropic client to auto-trace all messages.create() calls.
+   * Works with the `@anthropic-ai/sdk` npm package (sync and async).
+   *
+   * @example
+   * ```typescript
+   * import Anthropic from '@anthropic-ai/sdk';
+   * const claude = lens.wrapAnthropic(new Anthropic(), 'ClaudeAgent');
+   * const msg = await claude.messages.create({
+   *   model: 'claude-4-sonnet-20260514',
+   *   max_tokens: 1024,
+   *   messages: [{ role: 'user', content: 'Hello Claude' }],
+   * });
+   * ```
+   */
+  wrapAnthropic<T>(client: T, agentName: string = 'Agent'): T {
+    const lens = this;
+    const c = client as Record<string, unknown>;
+
+    if (c.messages && typeof c.messages === 'object') {
+      const messages = c.messages as Record<string, unknown>;
+      const originalCreate = messages.create as (...args: unknown[]) => Promise<unknown>;
+
+      messages.create = async function (...args: unknown[]) {
+        const start = Date.now();
+        try {
+          const response = await originalCreate.apply(this, args) as Record<string, unknown>;
+          const durationMs = Date.now() - start;
+
+          const kwargs = (args[0] || {}) as Record<string, unknown>;
+          const inputMessages = (kwargs.messages || []) as Array<Record<string, unknown>>;
+
+          // Extract prompts
+          let userPrompt = '';
+          for (const msg of inputMessages) {
+            if (msg.role === 'user') {
+              const content = msg.content;
+              if (typeof content === 'string') {
+                userPrompt = content;
+              } else if (Array.isArray(content)) {
+                userPrompt = content
+                  .map((b: Record<string, unknown>) => (b.text as string) || '')
+                  .join(' ');
+              }
+            }
+          }
+
+          // System prompt can be string or array
+          let systemPrompt = '';
+          const sys = kwargs.system;
+          if (typeof sys === 'string') {
+            systemPrompt = sys;
+          } else if (Array.isArray(sys)) {
+            systemPrompt = sys
+              .map((b: Record<string, unknown>) => (b.text as string) || '')
+              .join(' ');
+          }
+
+          // Extract response text
+          let responseText = '';
+          const contentBlocks = response.content as Array<Record<string, unknown>> | undefined;
+          if (contentBlocks) {
+            const textParts: string[] = [];
+            for (const block of contentBlocks) {
+              if (block.type === 'text' && block.text) {
+                textParts.push(block.text as string);
+              } else if (block.type === 'tool_use') {
+                textParts.push(`[tool_use: ${block.name || 'unknown'}]`);
+                // Also trace the tool call separately
+                await lens.traceToolCall({
+                  agentName,
+                  toolName: (block.name as string) || 'unknown',
+                  toolInput: (block.input as Record<string, unknown>) || {},
+                  durationMs: 0,
+                });
+              }
+            }
+            responseText = textParts.join('\n');
+          }
+
+          // Extract token usage
+          let tokens: TokenUsage | undefined;
+          const usage = response.usage as Record<string, number> | undefined;
+          if (usage) {
+            const inputTokens = usage.input_tokens || 0;
+            const outputTokens = usage.output_tokens || 0;
+            tokens = {
+              prompt_tokens: inputTokens,
+              completion_tokens: outputTokens,
+              total_tokens: inputTokens + outputTokens,
+            };
+          }
+
+          await lens.traceLLMCall({
+            agentName,
+            model: (kwargs.model as string) || (response.model as string) || 'unknown',
+            provider: 'anthropic',
+            prompt: userPrompt,
+            systemPrompt,
+            response: responseText,
+            temperature: kwargs.temperature as number | undefined,
+            tokens,
+            durationMs,
+          });
+
+          return response;
+        } catch (err) {
+          await lens.traceError(agentName, String(err));
+          throw err;
+        }
+      };
+    }
+
+    return client;
+  }
+
+  // ─── Google Gemini Client Wrapper ───────────────────────────────────
+
+  /**
+   * Wrap a Google GenerativeModel to auto-trace generateContent() calls.
+   * Works with the `@google/generative-ai` npm package.
+   *
+   * @example
+   * ```typescript
+   * import { GoogleGenerativeAI } from '@google/generative-ai';
+   * const genAI = new GoogleGenerativeAI('API_KEY');
+   * const model = lens.wrapGoogle(
+   *   genAI.getGenerativeModel({ model: 'gemini-2.5-flash' }),
+   *   'GeminiAgent'
+   * );
+   * const result = await model.generateContent('Explain quantum computing');
+   * ```
+   */
+  wrapGoogle<T>(model: T, agentName: string = 'Agent'): T {
+    const lens = this;
+    const m = model as Record<string, unknown>;
+
+    if (typeof m.generateContent === 'function') {
+      const originalGenerate = m.generateContent as (...args: unknown[]) => Promise<unknown>;
+      const modelName = (m.model as string) || 'gemini-unknown';
+
+      m.generateContent = async function (...args: unknown[]) {
+        const start = Date.now();
+        try {
+          const response = await originalGenerate.apply(this, args) as Record<string, unknown>;
+          const durationMs = Date.now() - start;
+
+          // Extract prompt
+          let prompt = '';
+          if (args[0]) {
+            if (typeof args[0] === 'string') {
+              prompt = args[0];
+            } else if (Array.isArray(args[0])) {
+              prompt = args[0].map(String).join(' ');
+            } else {
+              prompt = JSON.stringify(args[0]).substring(0, 500);
+            }
+          }
+
+          // Extract response text
+          let responseText = '';
+          const respObj = response.response as Record<string, unknown> | undefined;
+          if (respObj && typeof respObj.text === 'function') {
+            try {
+              responseText = (respObj.text as () => string)();
+            } catch {
+              responseText = '';
+            }
+          }
+
+          // Extract token usage
+          let tokens: TokenUsage | undefined;
+          const usageMetadata = (respObj?.usageMetadata || response.usageMetadata) as Record<string, number> | undefined;
+          if (usageMetadata) {
+            const promptTokens = usageMetadata.promptTokenCount || 0;
+            const completionTokens = usageMetadata.candidatesTokenCount || 0;
+            const totalTokens = usageMetadata.totalTokenCount || (promptTokens + completionTokens);
+            tokens = {
+              prompt_tokens: promptTokens,
+              completion_tokens: completionTokens,
+              total_tokens: totalTokens,
+            };
+          }
+
+          await lens.traceLLMCall({
+            agentName,
+            model: modelName.replace('models/', ''),
+            provider: 'google',
+            prompt,
+            response: responseText,
+            tokens,
+            durationMs,
+          });
+
+          return response;
+        } catch (err) {
+          await lens.traceError(agentName, String(err));
+          throw err;
+        }
+      };
+    }
+
+    return model;
+  }
+
+  // ─── SSE Stream Connection ──────────────────────────────────────────
+
+  /** Subscribe to real-time trace events via SSE */
+  connectStream(onEvent: (event: string, data: unknown) => void): () => void {
+    const eventSource = new EventSource(`${this.serverUrl}/api/stream`);
+
+    eventSource.addEventListener('step:new', (e) => {
+      onEvent('step:new', JSON.parse(e.data));
+    });
+    eventSource.addEventListener('session:new', (e) => {
+      onEvent('session:new', JSON.parse(e.data));
+    });
+    eventSource.addEventListener('session:end', (e) => {
+      onEvent('session:end', JSON.parse(e.data));
+    });
+    eventSource.addEventListener('session:update', (e) => {
+      onEvent('session:update', JSON.parse(e.data));
+    });
+
+    return () => eventSource.close();
   }
 
   /** Get the session ID */

@@ -1,0 +1,41 @@
+# ─── AgentLens + MCPlex — The Superman Duo ──────────────────────────────
+# Run both services together. MCPlex auto-forwards events to AgentLens.
+#
+# Usage:
+#   docker-compose up
+#   
+#   AgentLens UI:    http://localhost:3000
+#   MCPlex Gateway:  http://localhost:3100/mcp
+#   MCPlex Dashboard: http://localhost:9090
+# ─────────────────────────────────────────────────────────────────────────
+
+services:
+  agentlens:
+    build:
+      context: ../agentlens
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  mcplex:
+    build:
+      context: ../mcplex
+      dockerfile: Dockerfile
+    ports:
+      - "3100:3100"
+      - "9090:9090"
+    volumes:
+      - ./mcplex.toml:/app/mcplex.toml:ro
+    environment:
+      # Enable the AgentLens bridge — events flow automatically
+      AGENTLENS_URL: "http://agentlens:3000/api/ingest"
+    depends_on:
+      agentlens:
+        condition: service_healthy
+    restart: unless-stopped

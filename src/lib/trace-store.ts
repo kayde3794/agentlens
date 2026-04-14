@@ -1,6 +1,20 @@
 // ─── Storage Configuration ──────────────────────────────────────────────────
 // Production-grade controls for sampling, TTL, and storage limits.
 
+import type { TraceSession, TraceStep, CostBreakdown } from './types';
+import { calculateCost } from './types';
+
+/** Raw ingest payload from the SDK — loosely typed to accept any field */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RawStep = Record<string, any>;
+
+/** Agent color palette for visual differentiation */
+const AGENT_COLORS = [
+  '#06b6d4', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444',
+  '#ec4899', '#3b82f6', '#14b8a6', '#f97316', '#6366f1',
+  '#84cc16', '#a855f7', '#22d3ee', '#fb923c', '#4ade80',
+];
+
 export interface StorageConfig {
   /** Sampling rate: 0.0–1.0. 1.0 = capture everything, 0.1 = capture 10%.
    *  Anomalies and errors are ALWAYS captured regardless of sampling rate. */
